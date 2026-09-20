@@ -29,8 +29,6 @@ import {
   X,
 } from "lucide-react";
 import {
-  DEMO_SNAPSHOT,
-  demoOrders,
   failureLabels,
   filterOrders,
   formatAge,
@@ -41,26 +39,14 @@ import {
   type QueueFilter,
 } from "@/lib/demo-data";
 
+import { snapshotLabel, type ConsoleData } from "@/lib/console-data";
+
 type View = "exceptions" | "activity" | "connections" | "demo";
 const navigation = [
   { id: "exceptions", label: "Exceptions", icon: Inbox },
   { id: "activity", label: "Activity", icon: Activity },
   { id: "connections", label: "Connections", icon: Link2 },
 ] as const;
-const openOrders = demoOrders.filter((order) => order.status !== "resolved");
-const reviewCount = demoOrders.filter(
-  (order) => order.status === "needs_review",
-).length;
-const retryCount = demoOrders.filter(
-  (order) => order.status === "retry_scheduled",
-).length;
-const resolvedCount = demoOrders.filter(
-  (order) => order.status === "resolved",
-).length;
-const openValue = openOrders.reduce(
-  (total, order) => total + order.amountCents,
-  0,
-);
 
 function StatusBadge({ status }: { status: OrderException["status"] }) {
   return (
@@ -86,7 +72,28 @@ function Brand() {
   );
 }
 
-export function RelayConsole() {
+export function RelayConsole({ data }: { data: ConsoleData }) {
+  const demoOrders = data.orders;
+  const persisted = data.source === "database";
+  const exampleOrder = demoOrders.find(
+    (order) =>
+      order.kind === "acknowledgement_unknown" && order.status !== "resolved",
+  );
+  const openOrders = demoOrders.filter((order) => order.status !== "resolved");
+  const reviewCount = demoOrders.filter(
+    (order) => order.status === "needs_review",
+  ).length;
+  const retryCount = demoOrders.filter(
+    (order) => order.status === "retry_scheduled",
+  ).length;
+  const resolvedCount = demoOrders.filter(
+    (order) => order.status === "resolved",
+  ).length;
+  const openValue = openOrders.reduce(
+    (total, order) => total + order.amountCents,
+    0,
+  );
+
   const orderTrigger = useRef<HTMLElement | null>(null);
   const aboutTrigger = useRef<HTMLElement | null>(null);
   const menuTrigger = useRef<HTMLButtonElement | null>(null);
@@ -133,8 +140,8 @@ export function RelayConsole() {
         <div className="workspace">
           <span className="store-mark">N</span>
           <div>
-            <strong>Northline Supply</strong>
-            <span>Demo workspace</span>
+            <strong>{data.storeName}</strong>
+            <span>{persisted ? "Database demo" : "Fixture workspace"}</span>
           </div>
           <span className="workspace-dot" title="Fictional workspace" />
         </div>
@@ -163,7 +170,7 @@ export function RelayConsole() {
         >
           <FlaskConical size={18} strokeWidth={1.7} />
           <span>Demo lab</span>
-          <span className="tiny-label">01</span>
+          <span className="tiny-label">02</span>
         </button>
         <div className="sidebar-bottom">
           <div className="build-note">
@@ -245,7 +252,7 @@ export function RelayConsole() {
           <div className="topbar-right">
             <span className="demo-pill">
               <span />
-              Demo mode
+              {persisted ? "Persisted demo" : "Fixture demo"}
             </span>
             <button
               className="icon-button"
@@ -260,10 +267,14 @@ export function RelayConsole() {
           <div className="demo-banner">
             <Info size={15} />
             <span>
-              <strong>A working interface. Not a live store.</strong> All orders
-              and events are fictional fixtures.
+              <strong>
+                {persisted
+                  ? "PostgreSQL connected. Still a fictional store."
+                  : "Standalone fixture preview. No database connected."}
+              </strong>{" "}
+              No live orders or recovery jobs.
             </span>
-            <span className="banner-version">FOUNDATION / 001</span>
+            <span className="banner-version">PERSISTENCE / 002</span>
           </div>
           {view === "exceptions" && (
             <>
@@ -302,7 +313,7 @@ export function RelayConsole() {
                 <Metric
                   label="Retry scheduled"
                   value={String(retryCount).padStart(2, "0")}
-                  detail="Fixture states · no active worker"
+                  detail="Demo states · no active worker"
                   icon={<Clock3 size={17} />}
                 />
                 <Metric
@@ -322,7 +333,7 @@ export function RelayConsole() {
                   </div>
                   <span className="snapshot-label">
                     <Clock3 size={13} />
-                    Snapshot · 10:00 UTC
+                    Snapshot · {data.snapshotAt.slice(11, 16)} UTC
                   </span>
                 </div>
                 <div
@@ -534,22 +545,31 @@ export function RelayConsole() {
                   <strong>Recovery starts with certainty.</strong> An unknown
                   outcome isn’t a failed order. Check before retrying.
                 </p>
-                <button onClick={() => openOrder(demoOrders[0])}>
+                <button
+                  disabled={!exampleOrder}
+                  onClick={() => {
+                    if (exampleOrder) openOrder(exampleOrder);
+                  }}
+                >
                   Explore an example
                   <ArrowRight size={14} />
                 </button>
               </div>
             </>
           )}
-          {view === "activity" && <ActivityView onSelect={openOrder} />}
-          {view === "connections" && <ConnectionsView />}
-          {view === "demo" && <DemoView onSelect={openOrder} />}
+          {view === "activity" && (
+            <ActivityView data={data} onSelect={openOrder} />
+          )}
+          {view === "connections" && <ConnectionsView source={data.source} />}
+          {view === "demo" && (
+            <DemoView orders={data.orders} onSelect={openOrder} />
+          )}
           <footer className="page-footer">
             <span>
               RELAY <span className="footer-divider">/</span> BUILT FOR THE
               IN-BETWEEN
             </span>
-            <span>{DEMO_SNAPSHOT}</span>
+            <span>{snapshotLabel(data.snapshotAt)}</span>
           </footer>
         </main>
       </div>
@@ -572,7 +592,7 @@ export function RelayConsole() {
               <>
                 <div className="drawer-header">
                   <div>
-                    <span className="eyebrow">EXCEPTION DETAIL · FIXTURE</span>
+                    <span className="eyebrow">EXCEPTION DETAIL · DEMO</span>
                     <Dialog.Title>
                       Order #{selectedOrder.orderNumber}
                     </Dialog.Title>
@@ -608,13 +628,13 @@ export function RelayConsole() {
                   <div className="detail-grid">
                     <div>
                       <span>Store</span>
-                      <strong>Northline Supply</strong>
+                      <strong>{data.storeName}</strong>
                     </div>
                     <div>
                       <span>Payment</span>
                       <strong className="payment-confirmed">
                         <Check size={13} />
-                        Paid · fixture
+                        Paid · demo
                       </strong>
                     </div>
                     <div className="full-width">
@@ -624,7 +644,7 @@ export function RelayConsole() {
                   </div>
                   <div className="timeline-heading">
                     <h3>Order timeline</h3>
-                    <span>20 Sep · UTC</span>
+                    <span>Recorded events · UTC</span>
                   </div>
                   <ol className="timeline">
                     {selectedOrder.events.map((event) => (
@@ -641,7 +661,11 @@ export function RelayConsole() {
                         <div>
                           <div className="event-heading">
                             <strong>{event.title}</strong>
-                            <time>{event.time}</time>
+                            <time dateTime={event.occurredAt}>
+                              {event.occurredAt
+                                ? `${event.occurredAt.slice(5, 10)} · ${event.time}`
+                                : event.time}
+                            </time>
                           </div>
                           <p>{event.description}</p>
                         </div>
@@ -685,16 +709,16 @@ export function RelayConsole() {
             <span className="about-mark">
               <ShieldCheck size={25} />
             </span>
-            <div className="eyebrow">RELAY · INCREMENT 001</div>
+            <div className="eyebrow">RELAY · INCREMENT 002</div>
             <Dialog.Title>
               A little clarity between
               <br />
               payment and fulfillment.
             </Dialog.Title>
             <Dialog.Description>
-              Relay is an order exception and recovery console. This first
-              increment establishes the interface and the way we explain
-              failures—before we automate their resolution.
+              Relay is an order exception and recovery console. This increment
+              adds durable records, validated state changes, and an append-only
+              audit trail—before we automate recovery.
             </Dialog.Description>
             <div className="about-facts">
               <p>
@@ -703,11 +727,13 @@ export function RelayConsole() {
               </p>
               <p>
                 <Check size={15} />
-                Typed, deterministic fictional records
+                {persisted
+                  ? "Fictional records read from PostgreSQL"
+                  : "Standalone TypeScript fixtures"}
               </p>
               <p>
                 <Info size={15} />
-                No authentication, database, or live integrations yet
+                No authentication or live integrations yet
               </p>
             </div>
             <button
@@ -753,13 +779,17 @@ function Metric({
 }
 
 function ActivityView({
+  data,
   onSelect,
 }: {
+  data: ConsoleData;
   onSelect: (order: OrderException) => void;
 }) {
-  const events = demoOrders
+  const events = data.orders
     .flatMap((order) => order.events.map((event) => ({ ...event, order })))
-    .sort((a, b) => b.time.localeCompare(a.time));
+    .sort((a, b) =>
+      (b.occurredAt ?? b.time).localeCompare(a.occurredAt ?? a.time),
+    );
   return (
     <>
       <section className="page-heading">
@@ -768,16 +798,20 @@ function ActivityView({
           <h1>Activity</h1>
           <p>Every event has context. Every decision should leave a trace.</p>
         </div>
-        <span className="subtle-chip">{events.length} fixture events</span>
+        <span className="subtle-chip">{events.length} demo events</span>
       </section>
       <section className="activity-panel">
         <div className="section-bar">
           <h2>Event history</h2>
-          <span>20 September 2026 · UTC · newest first</span>
+          <span>{snapshotLabel(data.snapshotAt)} · newest first</span>
         </div>
         {events.map((event) => (
           <div className="activity-row" key={event.id}>
-            <time>{event.time}</time>
+            <time dateTime={event.occurredAt}>
+              {event.occurredAt
+                ? `${event.occurredAt.slice(5, 10)} · ${event.time}`
+                : event.time}
+            </time>
             <span className={`activity-icon ${event.tone}`}>
               {event.tone === "success" ? (
                 <CheckCheck size={17} />
@@ -805,7 +839,7 @@ function ActivityView({
   );
 }
 
-function ConnectionsView() {
+function ConnectionsView({ source }: { source: ConsoleData["source"] }) {
   return (
     <>
       <section className="page-heading">
@@ -828,7 +862,11 @@ function ConnectionsView() {
           </p>
           <div className="connection-meta">
             <span>Current source</span>
-            <strong>Local TypeScript fixtures</strong>
+            <strong>
+              {source === "database"
+                ? "PostgreSQL · seeded demonstration"
+                : "Local TypeScript fixtures"}
+            </strong>
           </div>
           <button className="button button-secondary" disabled>
             <Link2 size={15} />
@@ -860,7 +898,7 @@ function ConnectionsView() {
         <div>
           <strong>No credentials needed.</strong>
           <p>
-            This foundation does not collect API keys or connect to customer
+            This demonstration does not collect API keys or connect to customer
             systems. We will add secret handling, authentication, and webhook
             verification before using real store data.
           </p>
@@ -870,7 +908,14 @@ function ConnectionsView() {
   );
 }
 
-function DemoView({ onSelect }: { onSelect: (order: OrderException) => void }) {
+function DemoView({
+  orders,
+  onSelect,
+}: {
+  orders: OrderException[];
+  onSelect: (order: OrderException) => void;
+}) {
+  const resolvedExample = orders.find((order) => order.status === "resolved");
   const scenarios = [
     {
       number: "01",
@@ -878,7 +923,11 @@ function DemoView({ onSelect }: { onSelect: (order: OrderException) => void }) {
       description:
         "The warehouse times out. Did it accept the order? Inspect the evidence before deciding to retry.",
       icon: Clock3,
-      order: demoOrders[0],
+      order: orders.find(
+        (order) =>
+          order.kind === "acknowledgement_unknown" &&
+          order.status !== "resolved",
+      ),
       note: "Ambiguous outcome",
     },
     {
@@ -887,7 +936,10 @@ function DemoView({ onSelect }: { onSelect: (order: OrderException) => void }) {
       description:
         "A shipping address is rejected. The system should ask for a correction, not retry the same invalid input.",
       icon: TriangleAlert,
-      order: demoOrders[1],
+      order: orders.find(
+        (order) =>
+          order.kind === "address_rejected" && order.status !== "resolved",
+      ),
       note: "Confirmed rejection",
     },
     {
@@ -896,7 +948,10 @@ function DemoView({ onSelect }: { onSelect: (order: OrderException) => void }) {
       description:
         "A temporary outage interrupts submission. Explore a fixture representing a safe, idempotent retry policy.",
       icon: LoaderCircle,
-      order: demoOrders[2],
+      order: orders.find(
+        (order) =>
+          order.kind === "warehouse_unavailable" && order.status !== "resolved",
+      ),
       note: "Transient failure",
     },
   ];
@@ -917,8 +972,8 @@ function DemoView({ onSelect }: { onSelect: (order: OrderException) => void }) {
         <div>
           <strong>Inspect the examples. Execution comes next.</strong>
           <p>
-            These cards open existing fixtures. They do not trigger failures,
-            schedule retries, or change order state.
+            These cards inspect the currently loaded demo records. They do not
+            trigger failures, schedule retries, or change order state.
           </p>
         </div>
       </div>
@@ -937,7 +992,10 @@ function DemoView({ onSelect }: { onSelect: (order: OrderException) => void }) {
               <p>{description}</p>
               <button
                 className="button button-secondary"
-                onClick={() => onSelect(order)}
+                disabled={!order}
+                onClick={() => {
+                  if (order) onSelect(order);
+                }}
               >
                 Inspect example
                 <ArrowUpRight size={16} />
@@ -948,7 +1006,10 @@ function DemoView({ onSelect }: { onSelect: (order: OrderException) => void }) {
       </div>
       <button
         className="resolved-example"
-        onClick={() => onSelect(demoOrders[8])}
+        disabled={!resolvedExample}
+        onClick={() => {
+          if (resolvedExample) onSelect(resolvedExample);
+        }}
       >
         <span className="resolved-example-icon">
           <CheckCheck size={20} />

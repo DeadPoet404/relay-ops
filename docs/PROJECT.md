@@ -1,5 +1,7 @@
 # Relay — project brief
 
+> **Current implementation: increment 002.** The interface foundation and PostgreSQL persistence/domain layer are implemented. See [PERSISTENCE.md](PERSISTENCE.md) for the shipped scope and limitations. The architecture below describes the target system; Shopify ingestion, worker execution, and live recovery are not implemented yet.
+
 ## Product and audience
 
 Relay is a focused order exception and recovery console for an e-commerce operations team, designed to demonstrate implementation capability to commerce agencies. It is not a storefront, ERP, warehouse management system, or generic automation builder.

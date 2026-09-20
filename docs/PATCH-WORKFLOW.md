@@ -46,3 +46,16 @@ If you deliberately resolve an application conflict, stage the resolution and us
 ## Patch delivery baseline
 
 Increment 001 adds the entire project to an empty repository with an existing empty initial commit. It does not depend on the initial commit's hash. Future patches will depend on the files produced by earlier increments. Keep your repository history and worktree state visible when requesting the next patch.
+
+## Increment 002
+
+Apply `002-relay-persistence.patch` on top of increment 001, with a clean worktree. The published base checked during preparation was `fcfe034` in `DeadPoet404/relay-ops`; its tracked source matched the original foundation exactly. Commit hashes can differ when patches are applied; the source baseline is what matters.
+
+```bash
+git am "$HOME/Downloads/002-relay-persistence.patch"
+npm ci
+```
+
+Then follow `docs/PERSISTENCE.md`: configure the ignored local environment, start PostgreSQL, apply migrations, and seed the fictional dataset before selecting database mode. New dependencies are already recorded in the lockfile. Do not run create-next-app, regenerate the initial migration, or recommit the patch manually.
+
+Increment 002 also adds a GitHub Actions workflow. If GitHub rejects the push because your OAuth token lacks the workflow scope, run `gh auth refresh -h github.com -s workflow` and retry the push. Check the Actions tab to verify the remote checks actually ran; local test success does not establish a remote workflow result.

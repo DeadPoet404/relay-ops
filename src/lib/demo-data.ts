@@ -16,6 +16,7 @@ export type QueueFilter =
 export interface TimelineEvent {
   id: string;
   time: string;
+  occurredAt?: string;
   title: string;
   description: string;
   tone: "neutral" | "warning" | "success";
@@ -33,6 +34,7 @@ export interface OrderException {
   kind: FailureKind;
   ageMinutes: number;
   openedAt: string;
+  openedAtIso?: string;
   description: string;
   nextStep: string;
   reference: string;
@@ -54,7 +56,7 @@ export const failureLabels: Record<FailureKind, string> = {
   acknowledgement_unknown: "Acknowledgement unknown",
 };
 
-const scenarioDetails: Record<
+export const scenarioDetails: Record<
   FailureKind,
   { description: string; nextStep: string }
 > = {
@@ -273,7 +275,8 @@ export function formatMoney(cents: number) {
   return new Intl.NumberFormat("en-US", {
     style: "currency",
     currency: "USD",
-    maximumFractionDigits: 0,
+    minimumFractionDigits: cents % 100 === 0 ? 0 : 2,
+    maximumFractionDigits: 2,
   }).format(cents / 100);
 }
 
