@@ -1,6 +1,5 @@
 "use client";
 import { createContext, useContext, useEffect, useState } from "react";
-// useState already imported for AddToBag micro-interaction
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
@@ -68,6 +67,15 @@ export function StoreShell({ children }: { children: React.ReactNode }) {
       } catch {}
       return next;
     });
+    // dispatch outside render phase so LiveJourneyWidget can react
+    setTimeout(() => {
+      try {
+        const raw = localStorage.getItem("northline.cart");
+        const parsed = raw ? JSON.parse(raw) : [];
+        const count = Array.isArray(parsed) ? parsed.reduce((a: number, b: { quantity: number }) => a + b.quantity, 0) : 0;
+        window.dispatchEvent(new CustomEvent("northline:cart-updated", { detail: { count } }));
+      } catch {}
+    }, 0);
   }
   function add(id: string) {
     change(id, (cart.find((i) => i.productId === id)?.quantity ?? 0) + 1);
@@ -78,6 +86,11 @@ export function StoreShell({ children }: { children: React.ReactNode }) {
     try {
       localStorage.removeItem("northline.cart");
     } catch {}
+    setTimeout(() => {
+      try {
+        window.dispatchEvent(new CustomEvent("northline:cart-updated", { detail: { count: 0 } }));
+      } catch {}
+    }, 0);
   }
   const count = cart.reduce((n, i) => n + i.quantity, 0);
   const total = cart.reduce(

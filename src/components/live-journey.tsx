@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState, useCallback, useRef } from "react";
 import { usePathname } from "next/navigation";
-import { Check, Loader2, AlertTriangle, ChevronDown, ChevronUp, Clock } from "lucide-react";
+import { Check, Loader2, AlertTriangle, ChevronDown, ChevronUp, Clock, ShoppingBag } from "lucide-react";
 import { deriveLiveJourney, pendingJourney, type LiveJourney } from "@/demo/live-stages";
 import type { LabRun, Scenario } from "@/lab/contracts";
 import { scenarioLabels } from "@/lab/contracts";
@@ -25,6 +25,7 @@ export function LiveJourneyWidget() {
   const [tick, setTick] = useState(0);
   const [ready, setReady] = useState(false);
   const [dismissed, setDismissed] = useState(false);
+  const [cartActivity, setCartActivity] = useState<string | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const refreshIds = useCallback(() => {
@@ -37,9 +38,22 @@ export function LiveJourneyWidget() {
       const pId = pendingParsed?.requestId && isUuid(pendingParsed.requestId) ? pendingParsed.requestId : null;
       const scenRaw = localStorage.getItem("northline.nextScenario") || pendingParsed?.scenario || null;
       const scen = scenRaw && (scenRaw in scenarioLabels) ? (scenRaw as Scenario) : null;
+
+      // Only use path ID when on order/evidence pages, otherwise only lastOrder if not on demo landing
       if (pathId && isUuid(pathId)) setRunId(pathId);
-      else if (isUuid(last)) setRunId(last);
-      else setRunId(null);
+      else if (pathname?.startsWith("/store/orders") || pathname?.startsWith("/runs")) {
+        if (isUuid(last)) setRunId(last);
+        else setRunId(null);
+      } else if (pathname?.startsWith("/demo")) {
+        // on demo pages, don't show last completed order — only pending
+        setRunId(null);
+      } else {
+        // store catalog / checkout: show last only if pending exists or we are in checkout
+        if (pId && isUuid(last)) setRunId(last);
+        else if (pathname === "/store/checkout" && isUuid(last)) setRunId(last);
+        else setRunId(null);
+      }
+
       setPendingId(pId);
       setPendingScenario(scen);
     } catch {}
@@ -53,10 +67,21 @@ export function LiveJourneyWidget() {
       refreshIds();
       setTick((t) => t + 1);
     }, 1000);
-    window.addEventListener("storage", refreshIds);
+    const onStorage = () => refreshIds();
+    const onCart = (e: Event) => {
+      const custom = e as CustomEvent<{ count?: number }>;
+      const count = custom.detail?.count;
+      if (typeof count === "number") {
+        setCartActivity(count === 0 ? "Bag emptied" : `Bag updated · ${count} item${count === 1 ? "" : "s"}`);
+        setTimeout(() => setCartActivity(null), 3000);
+      }
+    };
+    window.addEventListener("storage", onStorage);
+    window.addEventListener("northline:cart-updated" as unknown as string, onCart as EventListener);
     return () => {
       clearInterval(iv);
-      window.removeEventListener("storage", refreshIds);
+      window.removeEventListener("storage", onStorage);
+      window.removeEventListener("northline:cart-updated" as unknown as string, onCart as EventListener);
     };
   }, [refreshIds]);
 
@@ -77,13 +102,10 @@ export function LiveJourneyWidget() {
         if (!res.ok) throw new Error("pending");
         const data = (await res.json()) as { run: LabRun };
         if (active && data.run) setRun(data.run);
-      } catch {
-        // keep last run or pending
-      } finally {
-        if (active) {
-          if (timerRef.current) clearTimeout(timerRef.current);
-          timerRef.current = setTimeout(() => void load(), 2500);
-        }
+      } catch {}
+      if (active) {
+        if (timerRef.current) clearTimeout(timerRef.current);
+        timerRef.current = setTimeout(() => void load(), 2500);
       }
     }
     void load();
@@ -97,6 +119,22 @@ export function LiveJourneyWidget() {
   void tick;
 
   if (!ready || dismissed) return null;
+
+  // cart activity transient
+  if (cartActivity && !pendingId && !run) {
+    return (
+      <div className="live-journey" role="status" aria-live="polite">
+        <div className="live-journey-header">
+          <div className="live-journey-title">
+            <strong><ShoppingBag size={12} style={{ display: "inline", marginRight: 6 }} />{cartActivity}</strong>
+            <span>Local bag · no charge · system will track after checkout</span>
+          </div>
+          <button className="live-journey-toggle" onClick={() => setCartActivity(null)}><ChevronDown size={14} /></button>
+        </div>
+        <div className="live-journey-progress"><i style={{ width: "35%" }} /></div>
+      </div>
+    );
+  }
 
   let journey: LiveJourney | null = null;
   if (run) journey = deriveLiveJourney(run);
@@ -136,7 +174,7 @@ export function LiveJourneyWidget() {
         <>
           <div className="live-journey-body">
             <div className="live-journey-mini" style={{ padding: 0, marginBottom: 10 }}>
-              <span style={{ fontSize: 9, letterSpacing: 1, color: "#7a7694", fontWeight: 700 }}>SYSTEM ACTIVITY · REAL WORKER + DB</span>
+              <span style={{ fontSize: 9, letterSpacing: 1, color: "#7a7694", fontWeight: 700 }}>SYSTEM ACTIVITY · CLICK → REAL WORK</span>
             </div>
             <div className="live-journey-stages">
               {journey.stages.slice(0, 3).map((st) => (
@@ -153,7 +191,7 @@ export function LiveJourneyWidget() {
             </div>
           </div>
           <div className="live-journey-note">
-            {journey.isPaced ? "6s queue + 2s handoff after durable claim — you clicked, system is working." : "Live polling every 2.5s."} <button onClick={() => setDismissed(true)} style={{ marginLeft: 8, textDecoration: "underline", background: "none", border: 0, padding: 0, fontSize: 9, color: "#7b8190" }}>Dismiss</button>
+            {journey.isPaced ? "6s queue + 2s handoff — you clicked, system is working." : "Live polling every 2.5s."} <button onClick={() => setDismissed(true)} style={{ marginLeft: 8, textDecoration: "underline", background: "none", border: 0, padding: 0, fontSize: 9, color: "#7b8190" }}>Dismiss</button>
           </div>
         </>
       )}
