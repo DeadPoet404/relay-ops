@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRef, useState } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import {
@@ -176,6 +177,10 @@ export function RelayConsole({ data: initialData }: { data: ConsoleData }) {
           <span>Demo lab</span>
           <span className="tiny-label">06</span>
         </button>
+        <Link href="/" className="nav-item">
+          <Box size={18} strokeWidth={1.7} />
+          <span>Portfolio landing</span>
+        </Link>
         <a href="/demo" className="nav-item">
           <Play size={18} strokeWidth={1.7} />
           <span>Try the guided demo</span>
@@ -530,10 +535,12 @@ export function RelayConsole({ data: initialData }: { data: ConsoleData }) {
                 </div>
                 {visibleOrders.length === 0 && (
                   <div className="empty-state">
-                    <Search size={24} />
+                    <div style={{ width: 48, height: 48, borderRadius: 12, background: "#f8f7fb", border: "1px solid #eceaf2", display: "grid", placeItems: "center", margin: "0 auto", color: "#8b8fa0" }}>
+                      <Search size={20} />
+                    </div>
                     <h3>No matching exceptions</h3>
                     <p>
-                      Try a different order number, customer, or exception type.
+                      No orders match your current filters. Try a different order number,<br />customer, or exception type — or reset to see all open exceptions.
                     </p>
                     <button
                       className="button button-secondary"
@@ -556,10 +563,12 @@ export function RelayConsole({ data: initialData }: { data: ConsoleData }) {
                 </div>
               </section>
               <div className="safety-note">
-                <ShieldCheck size={17} />
+                <div style={{ width: 32, height: 32, borderRadius: 8, background: "#fff", border: "1px solid #eceaf2", display: "grid", placeItems: "center", color: "#7a7694", flexShrink: 0 }}>
+                  <ShieldCheck size={16} />
+                </div>
                 <p>
                   <strong>Recovery starts with certainty.</strong> An unknown
-                  outcome isn’t a failed order. Check before retrying.
+                  outcome isn’t a failed order. Relay checks the original reference via lookup before any retry — no blind resubmission, no duplicate.
                 </p>
                 <button
                   disabled={!exampleOrder}
