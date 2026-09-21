@@ -51,7 +51,7 @@ const cards: {
     label: "SERVICE FAILURE",
     title: "The warehouse is unavailable.",
     description:
-      "A documented 503 response becomes a visible exception. Automatic business retries come later.",
+      "A persistent outage exhausts three safe submissions, then stops for human review. No endless retry loop.",
     icon: CirclePause,
   },
   {
@@ -59,8 +59,24 @@ const cards: {
     label: "THE IMPORTANT EDGE CASE",
     title: "Accepted. But no answer.",
     description:
-      "The simulator saves the fulfillment, then delays its reply. Relay records uncertainty—not a second submission.",
+      "The warehouse accepts but its reply is lost. Relay finds the original fulfillment by reference—without a second submission.",
     icon: Clock3,
+  },
+  {
+    scenario: "temporary_outage",
+    label: "BOUNDED RECOVERY",
+    title: "Back online on attempt three.",
+    description:
+      "Two confirmed temporary failures, then acceptance. Retries reuse the original reference and unchanged payload.",
+    icon: RefreshCw,
+  },
+  {
+    scenario: "lookup_unavailable",
+    label: "KNOW WHEN TO STOP",
+    title: "No reliable answer yet.",
+    description:
+      "The warehouse accepts, but status lookups fail. Three read-only checks end in human review—not another order.",
+    icon: ShieldCheck,
   },
 ];
 
@@ -81,6 +97,8 @@ export function ExecutionLab({
   const [loading, setLoading] = useState(enabled);
   const [error, setError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [checking, setChecking] = useState<string | null>(null);
+  const [lookupNote, setLookupNote] = useState<string | null>(null);
   const [lastRead, setLastRead] = useState<string | null>(null);
   const alive = useRef(true);
   const inFlight = useRef(false);
@@ -199,6 +217,35 @@ export function ExecutionLab({
     }
   }
 
+  async function checkWarehouse(runId: string) {
+    setChecking(runId);
+    try {
+      const response = await fetch("/api/lab/reconcile", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ runId }),
+        signal: AbortSignal.timeout(10000),
+      });
+      if (!response.ok)
+        throw new Error(
+          "Lookup request not confirmed. Refresh before trying again; do not create a replacement order.",
+        );
+      const result = (await response.json()) as { reason: string };
+      if (alive.current) {
+        setLookupNote(result.reason);
+        setActionError(null);
+      }
+      await refresh();
+    } catch (error) {
+      if (alive.current)
+        setActionError(
+          error instanceof Error ? error.message : "Lookup request failed.",
+        );
+    } finally {
+      if (alive.current) setChecking(null);
+    }
+  }
+
   return (
     <section className="execution-lab" aria-label="Executable local demo">
       <div className={`execution-notice ${enabled ? "execution-enabled" : ""}`}>
@@ -217,6 +264,17 @@ export function ExecutionLab({
         </div>
         <span className="subtle-chip">
           {enabled ? "LOCAL LAB" : "READ ONLY"}
+        </span>
+      </div>
+      <div className="recovery-policy" aria-label="Local recovery limits">
+        <span>
+          <strong>3</strong> submissions maximum
+        </span>
+        <span>
+          <strong>3</strong> read-only lookups maximum
+        </span>
+        <span>
+          <strong>60s</strong> reconciliation backstop
         </span>
       </div>
       <div className="execution-grid">
@@ -252,8 +310,8 @@ export function ExecutionLab({
             <strong>One request still needs confirmation.</strong>
             <p>
               Retry uses the same request ID. If the first request already
-              committed, no second order is created. Don’t reload this page to
-              start over.
+              committed, no second order is created. The request ID is retained
+              for this browser tab when session storage is available.
             </p>
             <code>{pending.requestId}</code>
           </div>
@@ -269,6 +327,11 @@ export function ExecutionLab({
         <p className="lab-progress" role="status">
           <LoaderCircle size={15} />
           Recording a durable demo request…
+        </p>
+      )}
+      {lookupNote && (
+        <p className="lab-progress" role="status">
+          {lookupNote}
         </p>
       )}
       {actionError && (
@@ -327,7 +390,13 @@ export function ExecutionLab({
                   <span>{scenarioLabels[run.scenario]}</span>
                 </div>
                 <span className={`run-state run-${run.status}`}>
-                  {runLabels[run.status]}
+                  {run.reviewReason
+                    ? "Needs review"
+                    : run.pendingAction === "retry"
+                      ? "Retry scheduled"
+                      : run.pendingAction === "lookup"
+                        ? "Checking warehouse"
+                        : runLabels[run.status]}
                 </span>
                 <ChevronDown
                   size={16}
@@ -338,10 +407,11 @@ export function ExecutionLab({
                 <div className="lab-run-detail">
                   <div className="lab-run-facts">
                     <span>
-                      Queue: <strong>{run.jobState ?? "unknown"}</strong>
+                      Submission job:{" "}
+                      <strong>{run.jobState ?? "unknown"}</strong>
                     </span>
                     <span>
-                      Claimed attempts: <strong>{run.attemptCount}</strong>
+                      Submissions: <strong>{run.attemptCount}/3</strong>
                     </span>
                     <span>
                       Warehouse:{" "}
@@ -350,14 +420,62 @@ export function ExecutionLab({
                       </strong>
                     </span>
                   </div>
-                  <code className="lab-reference">{run.reference}</code>
-                  {run.jobState === "failed" && (
-                    <p className="lab-error">
-                      Queue delivery exhausted its infrastructure retries. Check
-                      the worker output. No automatic manual replay is available
-                      in this increment.
+                  <div className="recovery-run-meta">
+                    <span>
+                      Reference lookups: <strong>{run.lookupCount}/3</strong>
+                    </span>
+                    <span>
+                      Recovery job:{" "}
+                      <strong>{run.recoveryJobState ?? "none"}</strong>
+                    </span>
+                  </div>
+                  {run.pendingAction && run.nextActionAt && (
+                    <p className="recovery-scheduled">
+                      <Clock3 size={14} />
+                      {run.pendingAction === "retry"
+                        ? "Authorized retry"
+                        : "Read-only lookup"}{" "}
+                      due at{" "}
+                      <time dateTime={run.nextActionAt}>
+                        {run.nextActionAt.slice(11, 19)} UTC
+                      </time>
                     </p>
                   )}
+                  {run.reviewReason && (
+                    <p className="lab-hint recovery-review">
+                      <TriangleAlert size={16} />
+                      <span>
+                        <strong>Human review required.</strong>{" "}
+                        {run.reviewReason}
+                      </span>
+                    </p>
+                  )}
+                  {!run.pendingAction &&
+                    !run.reviewReason &&
+                    ["unknown", "unavailable"].includes(run.status) &&
+                    run.lookupCount < 3 && (
+                      <button
+                        className="button button-secondary recovery-check"
+                        disabled={checking !== null}
+                        onClick={() => void checkWarehouse(run.id)}
+                      >
+                        <RefreshCw size={14} />
+                        {checking === run.id
+                          ? "Queueing lookup…"
+                          : "Check warehouse"}
+                      </button>
+                    )}
+                  <code className="lab-reference">{run.reference}</code>
+                  {!run.warehouseReference &&
+                    (run.jobState === "failed" ||
+                      run.recoveryJobState === "failed") && (
+                      <p className="lab-error">
+                        A queue delivery exhausted its infrastructure retries.
+                        Check the worker output. The periodic scan can re-arm
+                        eligible overdue work; no force-submit action is
+                        available.
+                      </p>
+                    )}
                   {run.status === "queued" && (
                     <p className="lab-hint">
                       Persisted and waiting for the worker. Queueing is not
@@ -397,8 +515,9 @@ export function ExecutionLab({
       )}
       <p className="execution-footnote">
         <ShieldCheck size={15} />
-        Queue redelivery is not permission to resubmit an order. Automatic
-        business retries and reconciliation arrive in the next increment.
+        Unknown outcome? Check the original reference. Confirmed temporary
+        failure? Retry within the budget. Unverified or exhausted? Stop for
+        human review.
       </p>
     </section>
   );

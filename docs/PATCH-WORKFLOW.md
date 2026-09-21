@@ -76,3 +76,20 @@ npm run demo:configure
 Do not regenerate migrations or reset the database. Node 22.12+ is now required by the pinned pg-boss release. Start the simulator, worker, and loopback development UI in separate terminals as described in `docs/EXECUTION.md`. `demo:configure` adds ignored `.env.local` settings; it does not commit credentials.
 
 The database test suite now also clears the test database's simulator/run tables and jobs and spawns real short-lived worker processes. Never supply a non-disposable database.
+
+## Increment 004
+
+Apply `004-relay-safe-recovery.patch` over increment 003. The published base checked during preparation was `5f17ff4` in `DeadPoet404/relay-ops`; its tracked source matched local `10861a5`. Stop the web app, worker, and simulator before upgrading. Do not leave a Patch 003 worker running against the upgraded schema.
+
+```bash
+git am "$HOME/Downloads/004-relay-safe-recovery.patch"
+npm ci
+npm run db:migrate
+npm run queue:init
+```
+
+Keep existing environment files, database volume, seed records, receipts, and audit history. Migration `0002_safe_recovery.sql` adds recovery metadata and a simulator request ledger. Existing attempts become attempt 1 with their original run ID as job ID. Previous migrations are unchanged. No reseed, database reset, or migration regeneration is required.
+
+Restart all three processes using the execution guide. Existing unresolved lab runs are eligible for read-only lookup on worker startup; historical unavailable runs are **not** retroactively authorized for submission retry. Rows already escalated by this increment remain in review. Seed-only examples are not recovery jobs.
+
+Verify lint, type checking, 38 unit tests, 39 disposable-database integration tests, and production build. Apply the test-database warnings above; never run the integration suite against preserved application data. Push normally and inspect the actual GitHub Actions result.

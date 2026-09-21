@@ -18,9 +18,16 @@ import {
   labRuns,
   orders,
   simulatorReceipts,
+  simulatorRequests,
   submissionAttempts,
 } from "../src/db/schema";
-import { createBoss, installQueue, SUBMISSION_QUEUE } from "../src/queue/boss";
+import {
+  createBoss,
+  installQueue,
+  SUBMISSION_QUEUE,
+  RECOVERY_QUEUE,
+  SCAN_QUEUE,
+} from "../src/queue/boss";
 import { createRun } from "../src/lab/create-run";
 import { readRuns } from "../src/lab/read-runs";
 import { createSimulator } from "../src/simulator/server";
@@ -50,9 +57,10 @@ beforeAll(async () => {
   baseUrl = `http://127.0.0.1:${address.port}`;
 });
 beforeEach(async () => {
-  await boss.deleteAllJobs(SUBMISSION_QUEUE);
+  for (const queue of [SUBMISSION_QUEUE, RECOVERY_QUEUE, SCAN_QUEUE])
+    await boss.deleteAllJobs(queue);
   await db.execute(
-    sql`TRUNCATE TABLE submission_attempts, lab_runs, simulator_receipts, audit_events, exceptions, fulfillment_intents, orders, stores`,
+    sql`TRUNCATE TABLE simulator_requests, submission_attempts, lab_runs, simulator_receipts, audit_events, exceptions, fulfillment_intents, orders, stores`,
   );
   await seedDemo(db);
 });
@@ -160,7 +168,7 @@ describe.sequential("durable local execution", () => {
   });
   it("records a normal acknowledgement without creating an exception", async () => {
     const { runId } = await run("accepted");
-    await processRun(resources, runId, submit);
+    await processRun(resources, runId, submit, boss);
     expect(await status(runId)).toBe("accepted");
     expect((await readConsole(db)).orders).toHaveLength(10);
     expect((await readRuns(db))[0]).toMatchObject({
@@ -171,7 +179,7 @@ describe.sequential("durable local execution", () => {
   });
   it("records a rejection and a review item without retrying", async () => {
     const { runId } = await run("address_rejected");
-    await processRun(resources, runId, submit);
+    await processRun(resources, runId, submit, boss);
     expect(await status(runId)).toBe("rejected");
     const data = await readConsole(db);
     expect(data.orders.find((o) => o.reference.endsWith(runId))).toMatchObject({
@@ -180,18 +188,21 @@ describe.sequential("durable local execution", () => {
     });
     expect(await db.select().from(simulatorReceipts)).toHaveLength(0);
   });
-  it("records a 503 without scheduling a business retry", async () => {
+  it("records a confirmed 503 and schedules a bounded safe retry", async () => {
     const { runId } = await run("unavailable");
-    await processRun(resources, runId, submit);
+    await processRun(resources, runId, submit, boss);
     expect(await status(runId)).toBe("unavailable");
     expect(
       (await readConsole(db)).orders.find((o) => o.reference.endsWith(runId)),
-    ).toMatchObject({ kind: "warehouse_unavailable", status: "needs_review" });
+    ).toMatchObject({
+      kind: "warehouse_unavailable",
+      status: "retry_scheduled",
+    });
     expect(await db.select().from(simulatorReceipts)).toHaveLength(0);
   });
   it("keeps accepted-but-timed-out submissions unknown to Relay, with one provider receipt", async () => {
     const { runId } = await run("accepted_timeout");
-    await processRun(resources, runId, submit);
+    await processRun(resources, runId, submit, boss);
     expect(await status(runId)).toBe("unknown");
     expect(await db.select().from(simulatorReceipts)).toHaveLength(1);
     expect((await readRuns(db))[0].warehouseReference).toBeNull();
@@ -199,8 +210,8 @@ describe.sequential("durable local execution", () => {
   it("does not issue a second HTTP submission when a terminal job is delivered again", async () => {
     const { runId } = await run("accepted_timeout");
     const connector = vi.fn(submit);
-    await processRun(resources, runId, connector);
-    await processRun(resources, runId, connector);
+    await processRun(resources, runId, connector, boss);
+    await processRun(resources, runId, connector, boss);
     expect(connector).toHaveBeenCalledTimes(1);
     expect(await db.select().from(submissionAttempts)).toHaveLength(1);
   });
@@ -208,8 +219,8 @@ describe.sequential("durable local execution", () => {
     const { runId } = await run("accepted");
     const connector = vi.fn(submit);
     const results = await Promise.allSettled([
-      processRun(resources, runId, connector),
-      processRun(resources, runId, connector),
+      processRun(resources, runId, connector, boss),
+      processRun(resources, runId, connector, boss),
     ]);
     expect(results.some((r) => r.status === "fulfilled")).toBe(true);
     expect(connector).toHaveBeenCalledTimes(1);
@@ -219,19 +230,21 @@ describe.sequential("durable local execution", () => {
     const { runId } = await run("accepted");
     const connector = vi.fn(submit);
     await expect(
-      processRun(resources, runId, connector, {
+      processRun(resources, runId, connector, boss, {
         afterClaim: async () => {
           throw new Error("Simulated process interruption");
         },
       }),
     ).rejects.toThrow("interruption");
     expect(await status(runId)).toBe("running");
-    await processRun(resources, runId, connector);
+    await processRun(resources, runId, connector, boss);
     expect(await status(runId)).toBe("unknown");
     expect(connector).not.toHaveBeenCalled();
-    expect((await readRuns(db))[0].events.at(-1)?.title).toContain(
-      "Interrupted submission",
-    );
+    expect(
+      (await readRuns(db))[0].events.some((event) =>
+        event.title.includes("Interrupted submission"),
+      ),
+    ).toBe(true);
   });
   it("requires simulator authentication, rejects malformed input, and deduplicates accepted references", async () => {
     expect((await fetch(`${baseUrl}/health`)).status).toBe(401);
@@ -310,8 +323,8 @@ describe.sequential("durable local execution", () => {
       const secondWorker = await worker();
       try {
         await vi.waitFor(
-          async () => expect(await status(runId)).toBe("unknown"),
-          { timeout: 18000, interval: 100 },
+          async () => expect(await status(runId)).toBe("accepted"),
+          { timeout: 22000, interval: 100 },
         );
         expect(await db.select().from(simulatorReceipts)).toHaveLength(1);
         expect(await db.select().from(submissionAttempts)).toHaveLength(1);
@@ -323,4 +336,33 @@ describe.sequential("durable local execution", () => {
       await boss.updateQueue(SUBMISSION_QUEUE, { expireInSeconds: 20 });
     }
   }, 40000);
+  it("retains delayed business retries across an actual worker restart", async () => {
+    const { runId } = await createRun(db, boss, {
+      requestId: crypto.randomUUID(),
+      scenario: "temporary_outage",
+    });
+    await processRun(resources, runId, submit, boss);
+    const [scheduled] = await db
+      .select()
+      .from(labRuns)
+      .where(eq(labRuns.id, runId));
+    expect(scheduled.pendingAction).toBe("retry");
+    expect(scheduled.nextActionAt!.getTime()).toBeGreaterThan(Date.now());
+    const first = await worker();
+    await stopChild(first);
+    const restarted = await worker();
+    try {
+      await vi.waitFor(
+        async () => expect(await status(runId)).toBe("accepted"),
+        { timeout: 20000, interval: 100 },
+      );
+      expect(await db.select().from(submissionAttempts)).toHaveLength(3);
+      expect(
+        (await db.select().from(simulatorRequests))[0].submissionCount,
+      ).toBe(3);
+      expect(await db.select().from(simulatorReceipts)).toHaveLength(1);
+    } finally {
+      await stopChild(restarted);
+    }
+  });
 });

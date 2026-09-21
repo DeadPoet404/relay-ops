@@ -15,6 +15,13 @@
       "when": 1789961383366,
       "tag": "0001_executable_demo_lab",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1789963549344,
+      "tag": "0002_safe_recovery",
+      "breakpoints": true
     }
   ]
 }

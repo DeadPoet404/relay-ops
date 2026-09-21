@@ -1,183 +1,260 @@
-import { eq, max } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { z } from "zod";
-import type { createDatabase, Transaction } from "../db/client";
-import {
-  auditEvents,
-  fulfillmentIntents,
-  labRuns,
-  orders,
-  submissionAttempts,
-} from "../db/schema";
+import type { PgBoss } from "pg-boss";
+import { labRuns, submissionAttempts } from "../db/schema";
 import { applyFulfillmentEventInTransaction } from "../db/apply-event";
 import type { ConnectorResult, Submission } from "../simulator/protocol";
-import type { FulfillmentEvent } from "../domain/fulfillment";
-import type { RunState } from "../lab/contracts";
+import {
+  attempts,
+  audit,
+  eventTime,
+  loadRun,
+  noAction,
+  withRunLock,
+  type Resources,
+  type RunRow,
+} from "../recovery/state";
+import type { Transaction } from "../db/client";
+import { scheduleAction, requireReview } from "../recovery/schedule";
+import {
+  canRetrySubmission,
+  LOOKUP_DELAY_MS,
+  MAX_SUBMISSIONS,
+  retryDelayMs,
+} from "../recovery/policy";
 
-type Resources = ReturnType<typeof createDatabase>;
-async function loadRun(tx: Transaction, id: string) {
-  const [row] = await tx
-    .select({ run: labRuns, intent: fulfillmentIntents, order: orders })
-    .from(labRuns)
-    .innerJoin(fulfillmentIntents, eq(fulfillmentIntents.id, labRuns.intentId))
-    .innerJoin(orders, eq(orders.id, fulfillmentIntents.orderId))
-    .where(eq(labRuns.id, id))
-    .for("update", { of: [labRuns, fulfillmentIntents] });
-  if (!row) throw new Error("Demo run not found");
-  return row;
+export async function recordInterrupted(
+  tx: Transaction,
+  boss: PgBoss,
+  row: RunRow,
+) {
+  const [last] = await attempts(tx, row.run.id);
+  const now = eventTime(row);
+  await applyFulfillmentEventInTransaction(tx, {
+    storeId: row.run.storeId,
+    intentId: row.intent.id,
+    expectedVersion: row.intent.version,
+    actor: "demo_worker",
+    occurredAt: now,
+    event: { type: "submission_timed_out" },
+  });
+  await tx
+    .update(labRuns)
+    .set({ ...noAction, status: "unknown", completedAt: now })
+    .where(eq(labRuns.id, row.run.id));
+  if (last)
+    await tx
+      .update(submissionAttempts)
+      .set({ result: "interrupted", completedAt: now })
+      .where(eq(submissionAttempts.id, last.id));
+  await audit(
+    tx,
+    row,
+    "interrupted_submission",
+    "Interrupted submission held for review",
+    "The earlier attempt has no recorded outcome. No new POST was issued; recovery will use a read-only reference lookup.",
+    "warning",
+  );
+  await scheduleAction(
+    tx,
+    boss,
+    row,
+    "lookup",
+    LOOKUP_DELAY_MS,
+    "Interrupted submission: investigate the original reference, never blindly resubmit.",
+  );
 }
 
-/** Queue delivery may repeat. The persisted claim is the no-resubmission boundary.
- * A process lost after claiming is classified as unknown on redelivery, even if
- * it might have crashed BEFORE sending. That conservative false uncertainty is
- * preferable to duplicate fulfillment. Reconciliation is a later increment.
- */
+/** Exactly one claim per authorized delivery. Repeated/stale deliveries cannot
+ * create a new attempt. Unknown outcomes go to GET lookup, not another POST. */
 export async function processRun(
   resources: Resources,
   rawId: string,
   submit: (request: Submission) => Promise<ConnectorResult>,
+  boss: PgBoss,
   hooks?: { afterClaim?: () => Promise<void> },
+  retryActionId?: string,
 ) {
   const id = z.uuid().parse(rawId);
-  const client = await resources.pool.connect();
-  let locked = false;
-  let broken = false;
-  try {
-    const lock = await client.query<{ locked: boolean }>(
-      "SELECT pg_try_advisory_lock(hashtextextended($1, 7303)) AS locked",
-      [id],
-    );
-    locked = lock.rows[0].locked;
-    if (!locked) throw new Error("Demo run is already being handled");
+  const deliveryId = retryActionId ? z.uuid().parse(retryActionId) : id;
+  return withRunLock(resources, id, async () => {
     const request = await resources.db.transaction(async (tx) => {
-      const { run, intent, order } = await loadRun(tx, id);
-      if (run.status !== "queued" && run.status !== "running") return null;
-      const now = new Date(Math.max(Date.now(), intent.updatedAt.getTime()));
-      if (run.status === "running") {
-        await applyFulfillmentEventInTransaction(tx, {
-          storeId: run.storeId,
-          intentId: intent.id,
-          expectedVersion: intent.version,
-          actor: "demo_worker",
-          occurredAt: now,
-          event: { type: "submission_timed_out" },
-        });
-        await tx
-          .update(labRuns)
-          .set({ status: "unknown", completedAt: now })
-          .where(eq(labRuns.id, id));
-        await tx
-          .update(submissionAttempts)
-          .set({ result: "interrupted", completedAt: now })
-          .where(eq(submissionAttempts.runId, id));
-        const [last] = await tx
-          .select({ seq: max(auditEvents.sequence) })
-          .from(auditEvents)
-          .where(eq(auditEvents.intentId, intent.id));
-        await tx.insert(auditEvents).values({
-          intentId: intent.id,
-          sequence: (last.seq ?? 0) + 1,
-          type: "interrupted_submission",
-          actor: "demo_worker",
-          title: "Interrupted submission held for review",
-          description:
-            "An earlier worker claimed this submission without recording an outcome. This delivery made no new warehouse request.",
-          tone: "warning",
-          occurredAt: now,
-        });
+      const row = await loadRun(tx, id);
+      const history = await attempts(tx, id);
+      if (row.run.status === "running") {
+        if (history[0]?.jobId === deliveryId)
+          await recordInterrupted(tx, boss, row);
         return null;
       }
+      if (retryActionId) {
+        if (
+          row.run.pendingAction !== "retry" ||
+          row.run.pendingActionId !== deliveryId ||
+          row.run.reviewReason ||
+          row.run.nextActionAt!.getTime() > Date.now()
+        )
+          return null;
+        if (
+          row.intent.state !== "retry_scheduled" ||
+          history[0]?.result !== "unavailable"
+        ) {
+          await requireReview(
+            tx,
+            row,
+            "Retry evidence is missing or changed. No submission was issued.",
+          );
+          return null;
+        }
+      } else if (row.run.status !== "queued" || history.length) return null;
+      if (history.length >= MAX_SUBMISSIONS) {
+        await requireReview(tx, row, "Submission retry budget exhausted.");
+        return null;
+      }
+      const now = eventTime(row);
       await applyFulfillmentEventInTransaction(tx, {
-        storeId: run.storeId,
-        intentId: intent.id,
-        expectedVersion: intent.version,
+        storeId: row.run.storeId,
+        intentId: row.intent.id,
+        expectedVersion: row.intent.version,
         actor: "demo_worker",
         occurredAt: now,
         event: { type: "submission_started" },
       });
       await tx
         .update(labRuns)
-        .set({ status: "running" })
+        .set({ ...noAction, status: "running", completedAt: null })
         .where(eq(labRuns.id, id));
-      await tx.insert(submissionAttempts).values({ runId: id, startedAt: now });
+      const [claim] = await tx
+        .insert(submissionAttempts)
+        .values({
+          runId: id,
+          attemptNumber: history.length + 1,
+          jobId: deliveryId,
+          startedAt: now,
+        })
+        .returning();
       return {
-        reference: intent.externalReference,
-        amountMinor: order.totalMinor,
-        currency: "USD" as const,
-        scenario: run.scenario,
+        claimId: claim.id,
+        request: {
+          reference: row.intent.externalReference,
+          amountMinor: row.order.totalMinor,
+          currency: "USD" as const,
+          scenario: row.run.scenario,
+        },
       };
     });
     if (!request) return;
     await hooks?.afterClaim?.();
     let result: ConnectorResult;
     try {
-      result = await submit(request);
+      result = await submit(request.request);
     } catch {
       result = { kind: "unknown" };
     }
     await resources.db.transaction(async (tx) => {
-      const { run, intent } = await loadRun(tx, id);
-      if (run.status !== "running") return;
-      const now = new Date(Math.max(Date.now(), intent.updatedAt.getTime()));
-      let event: FulfillmentEvent;
-      let status: RunState;
-      switch (result.kind) {
-        case "accepted":
-          status = "accepted";
-          event = {
-            type: "acceptance_confirmed",
-            warehouseReference: result.warehouseReference,
-            evidence: {
-              reference: intent.externalReference,
-              detail:
-                "The authenticated simulator returned a matching acceptance acknowledgement.",
-            },
-          };
-          break;
-        case "rejected":
-          status = "rejected";
-          event = { type: "address_rejected" };
-          break;
-        case "unavailable":
-          status = "unavailable";
-          event = {
-            type: "review_required",
-            kind: "warehouse_unavailable",
-            reason:
-              "The simulator returned its documented 503 response. No automatic business retry is enabled in increment 003.",
-          };
-          break;
-        default:
-          status = "unknown";
-          event = { type: "submission_timed_out" };
-      }
-      await applyFulfillmentEventInTransaction(tx, {
-        storeId: run.storeId,
-        intentId: intent.id,
-        expectedVersion: intent.version,
-        actor: "demo_worker",
-        occurredAt: now,
-        event,
-      });
+      const row = await loadRun(tx, id);
+      const history = await attempts(tx, id);
+      if (row.run.status !== "running" || history[0]?.id !== request.claimId)
+        return;
+      const now = eventTime(row);
+      const apply = (
+        event: Parameters<
+          typeof applyFulfillmentEventInTransaction
+        >[1]["event"],
+      ) =>
+        applyFulfillmentEventInTransaction(tx, {
+          storeId: row.run.storeId,
+          intentId: row.intent.id,
+          expectedVersion: row.intent.version,
+          actor: "demo_worker",
+          occurredAt: now,
+          event,
+        });
       await tx
         .update(submissionAttempts)
         .set({ result: result.kind, completedAt: now })
-        .where(eq(submissionAttempts.runId, id));
+        .where(eq(submissionAttempts.id, request.claimId));
+      const status =
+        result.kind === "accepted"
+          ? "accepted"
+          : result.kind === "rejected"
+            ? "rejected"
+            : result.kind === "unavailable"
+              ? "unavailable"
+              : "unknown";
       await tx
         .update(labRuns)
         .set({ status, completedAt: now })
         .where(eq(labRuns.id, id));
-    });
-  } finally {
-    if (locked) {
-      try {
-        await client.query(
-          "SELECT pg_advisory_unlock(hashtextextended($1, 7303))",
-          [id],
+      if (result.kind === "accepted") {
+        await apply({
+          type: "acceptance_confirmed",
+          warehouseReference: result.warehouseReference,
+          evidence: {
+            reference: row.intent.externalReference,
+            detail:
+              "Authenticated simulator acknowledgement matched the original reference and payload.",
+          },
+        });
+      } else if (result.kind === "rejected") {
+        await apply({ type: "address_rejected" });
+        await tx
+          .update(labRuns)
+          .set({
+            reviewReason:
+              "Shipping address rejected. Corrected-address submission is not enabled.",
+          })
+          .where(eq(labRuns.id, id));
+      } else if (canRetrySubmission(result.kind, history.length)) {
+        await apply({
+          type: "retry_authorized",
+          evidence: {
+            reference: row.intent.externalReference,
+            basis: "provider_idempotency",
+            detail:
+              "Documented simulator 503 response declares reference-v1 idempotency. Reuse the exact reference and unchanged payload; bounded budget applies.",
+          },
+        });
+        await scheduleAction(
+          tx,
+          boss,
+          row,
+          "retry",
+          retryDelayMs(history.length),
+          `Confirmed temporary failure. ${history.length}/${MAX_SUBMISSIONS} submissions used.`,
         );
-      } catch {
-        broken = true;
+      } else if (result.kind === "unavailable") {
+        await apply({
+          type: "review_required",
+          kind: "warehouse_unavailable",
+          reason:
+            "Three confirmed temporary failures exhausted the submission budget. No further POST is scheduled.",
+        });
+        await tx
+          .update(labRuns)
+          .set({
+            reviewReason:
+              "Submission budget exhausted (3/3). Investigate the warehouse before any future authorized action.",
+          })
+          .where(eq(labRuns.id, id));
+        await audit(
+          tx,
+          row,
+          "retry_exhausted",
+          "Retry budget exhausted",
+          "Three submissions recorded. Automation stopped; further submission requires a future authorized workflow.",
+          "warning",
+        );
+      } else {
+        await apply({ type: "submission_timed_out" });
+        await scheduleAction(
+          tx,
+          boss,
+          row,
+          "lookup",
+          LOOKUP_DELAY_MS,
+          "Submission outcome uncertain. Only a reference lookup is authorized.",
+        );
       }
-    }
-    client.release(broken);
-  }
+    });
+  });
 }

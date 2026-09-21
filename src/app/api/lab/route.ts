@@ -9,7 +9,7 @@ import {
 import { readRuns } from "@/lab/read-runs";
 import { getDatabase } from "@/server/console-data";
 import { getLabBoss } from "@/server/lab";
-import { SUBMISSION_QUEUE } from "@/queue/boss";
+import { SUBMISSION_QUEUE, RECOVERY_QUEUE } from "@/queue/boss";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -25,7 +25,16 @@ export async function GET(request: Request) {
     const enriched = await Promise.all(
       runs.map(async (run) => {
         const [job] = await boss.findJobs(SUBMISSION_QUEUE, { id: run.id });
-        return { ...run, jobState: job?.state ?? "not retained" };
+        const recovery = run.pendingActionId
+          ? (
+              await boss.findJobs(RECOVERY_QUEUE, { id: run.pendingActionId })
+            )[0]
+          : null;
+        return {
+          ...run,
+          jobState: job?.state ?? "not retained",
+          recoveryJobState: recovery?.state ?? "none",
+        };
       }),
     );
     return Response.json({ runs: enriched }, { headers });

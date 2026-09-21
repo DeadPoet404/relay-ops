@@ -21,3 +21,8 @@ export type ConnectorResult =
   | { kind: "rejected" }
   | { kind: "unavailable" }
   | { kind: "unknown" };
+
+export type LookupResult =
+  | { kind: "found"; warehouseReference: string }
+  | { kind: "not_found" }
+  | { kind: "unavailable" };

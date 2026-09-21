@@ -4,7 +4,7 @@
 
 Relay explores the systems between payment and fulfillment: **which orders are stuck, what evidence do we have, and what is safe to do next?**
 
-**Current increment: 003 — executable local demo.** The console, PostgreSQL persistence, durable queue, background worker, and HTTP warehouse simulator work together. All customers, paid orders, and warehouse records remain fictional. There is no Shopify integration, real shipment creation, automatic business retry/reconciliation, or production authentication.
+**Current increment: 004 — safe recovery and reconciliation.** The console, PostgreSQL persistence, durable queue, background worker, and HTTP warehouse simulator work together. All customers, paid orders, and warehouse records remain fictional. There is no Shopify integration, real shipment creation, production authentication, address correction, or permission to force a submission. Bounded retries and reference lookups operate only against the local simulator.
 
 ## Local setup
 
@@ -20,7 +20,7 @@ npm run queue:init
 npm run demo:configure
 ```
 
-`db:seed` inserts the Northline example dataset once and never overwrites compatible existing records. Application migrations are committed under `drizzle/`; pg-boss manages a separate `relay_jobs` schema. `queue:init` installs that schema and submission queue; it does not start a worker.
+`db:seed` inserts the Northline example dataset once and never overwrites compatible existing records. Application migrations are committed under `drizzle/`; pg-boss manages a separate `relay_jobs` schema. `queue:init` installs that schema and submission, recovery, and minutely reconciliation queues; it does not start a worker.
 
 `demo:configure` enables local execution and generates/retains a private simulator token in the ignored `.env.local`. It preserves unrelated settings and does not print the token. `.env.local` overrides `.env`, but exported shell variables take precedence over both. Restart processes after changes.
 
@@ -45,16 +45,20 @@ Open **http://localhost:3000**, then Demo lab. Use that exact origin unless you 
 
 ## What to demonstrate
 
-| Scenario                                  | Result                                                     |
-| ----------------------------------------- | ---------------------------------------------------------- |
-| Normal acceptance                         | A warehouse acknowledgement; no new exception              |
-| Address rejection                         | A review item; no unchanged-input retry                    |
-| Temporary warehouse outage                | A visible exception; automatic business retries remain off |
-| Acceptance followed by a delayed response | Outcome unknown, even though the simulator saved a receipt |
+| Scenario                                  | Result                                                       |
+| ----------------------------------------- | ------------------------------------------------------------ |
+| Normal acceptance                         | One submission and an acknowledgement                        |
+| Address rejection                         | Human review; no unchanged-input retry                       |
+| Persistent warehouse outage               | Three total submissions, then human review                   |
+| Acceptance followed by a delayed response | Original receipt recovered by GET lookup; no second POST     |
+| Temporary outage                          | Two documented failures, then acceptance on submission three |
+| Acceptance with unavailable lookup        | Three GET attempts, then review; still only one POST         |
 
-Each run creates one synthetic paid order and a pg-boss job **in the same database transaction**. The worker commits a durable claim before sending an HTTP request. If it crashes after that claim, redelivery marks the order unknown rather than submitting again. The lab shows queue state, claimed attempts, acknowledgement, and audit history for the latest 10 runs.
+Each run creates a synthetic paid order and pg-boss job **in the same database transaction**. Each recovery action is also committed atomically with its audit and queue job. The worker records claims before HTTP calls; restart/redelivery cannot authorize another submission without a valid, current retry action and documented provider contract.
 
-**Queue completion means the job recorded its outcome—not that the warehouse accepted or fulfilled the order.** Queue/infrastructure retries and business retries are separate concepts. The former are enabled for worker failures; the latter are not implemented yet.
+**Three submissions total, three lookups total.** Submission retries wait 2s then 4s, plus up to 500ms jitter. Uncertain outcomes use read-only lookup instead. A minutely reconciliation scan and startup scan investigate interrupted claims and re-arm overdue recovery actions. Worker availability and polling affect actual timing; these are not response-time guarantees.
+
+The latest ten runs show submission/lookup counts, current pending job, due time, review reason, and audit history. **Queue completion means a handler recorded an outcome—not that the warehouse accepted or fulfilled the order.** Infrastructure redelivery and authorized business retries remain separate concepts.
 
 The UI polls while the lab is active. Closing the browser does not stop the worker. Refreshing results does not trigger another fulfillment request. A failed creation response retains its UUID and offers Retry same request, including across reloads when browser session storage is available.
 
@@ -87,8 +91,8 @@ npm run test:db
 npm run build
 ```
 
-- **33 unit tests**: fixtures, filtering, display, domain policy, configuration, origin guards, and bounded request parsing.
-- **24 database/integration tests**: persistence, transactional rollback, duplicate/concurrent requests, all simulator outcomes, queue redelivery, and real worker stop/restart/SIGKILL cases.
+- **38 unit tests**: fixtures, filtering, display, domain policy, configuration, origin guards, and bounded request parsing.
+- **39 database/integration tests**: persistence, transactional rollback, duplicate/concurrent requests, all simulator outcomes, queue redelivery, bounded retries/lookups, stale delivery fencing, atomic recovery scheduling, and real worker stop/restart/SIGKILL cases.
 - GitHub Actions is configured to run the same core checks with PostgreSQL. Check the actual Actions result after pushing; configuration is not proof a remote run succeeded.
 
 **The integration suite truncates application/simulator tables and deletes queue jobs in its dedicated test database.** `TEST_DATABASE_URL` must point to a disposable loopback database whose name ends in `_test`, different from the application's database. Never use a database containing valuable data. Do not run multiple test suites against the same test database concurrently.
@@ -113,6 +117,7 @@ src/db/           Schema, migrations adapter, seed, reads, atomic state/audit wr
 src/lab/          Local execution contracts, request policy, run creation/projection
 src/queue/        pg-boss configuration and initialization
 src/worker/       Durable claim and submission processing
+src/recovery/     Bounded policy, transactional scheduling, lookup and scan handlers
 src/simulator/    HTTP provider simulator and its connector
 src/server/       Server-only database/queue boundaries
 scripts/          CLI entry points and local environment configuration
@@ -126,7 +131,7 @@ The worker communicates with the simulator over authenticated loopback HTTP. The
 
 - One fictional store, paid demo orders, USD, one fulfillment intent/exception per order.
 - Original seed examples retain their original snapshot timestamps. New runtime events advance observation time; older examples can show larger ages.
-- A run is capped at one claimed submission attempt in this increment. Unknown outcomes require later reconciliation, not an automatic replay button.
+- A run is capped at three claimed submissions and three claimed lookups. Unknown outcomes never authorize a POST; even lookup “not found” escalates rather than blindly resubmitting.
 - The local lab is capped at 100 total runs and displays the latest 10. This is a demo bound, not a production rate limiter.
 - Audit row updates/deletes are rejected by a PostgreSQL trigger, but privileged owners can bypass it. It is not a tamper-proof ledger.
 - Request/queue deduplication and local concurrency checks are **not** a claim of exactly-once external execution.

@@ -73,12 +73,12 @@ export async function readConsole(
                   exception.kind === "address_rejected"
                     ? "The executable warehouse simulator returned a confirmed address rejection. The worker recorded this exception; no new submission has been scheduled."
                     : exception.kind === "warehouse_unavailable"
-                      ? "The executable warehouse simulator returned its documented temporary-unavailability response. This run is held for review; automatic business retries are not enabled."
+                      ? "The simulator returned its documented temporary-unavailability response. Eligible retries reuse the same reference and stop after three total submissions; inspect the current status and audit history."
                       : "The worker could not establish the original submission outcome. The warehouse may have accepted it. Queue redelivery will not submit this order again.",
                 nextStep:
                   exception.kind === "address_rejected"
                     ? "Verify and correct the shipping details before a future authorized submission. The address-correction workflow is not enabled yet."
-                    : "Inspect the recorded evidence. Safe recovery and reconciliation arrive in the next increment; do not blindly resubmit.",
+                    : "Inspect the recovery history in the local Demo lab. Unknown outcomes are investigated by reference lookup. If automation escalated this run, it must not be blindly resubmitted.",
               }
             : scenarioDetails[exception.kind];
           return {

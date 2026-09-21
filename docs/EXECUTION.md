@@ -1,114 +1,109 @@
-# Increment 003 — executable local lab
+# Increment 004 — safe recovery and reconciliation
 
-## What is now real
+Relay is a **local synthetic execution lab**, not a live commerce integration. A paid fictional order goes through a durable submission claim, authenticated HTTP simulator, recorded evidence, and—where permitted—a durable recovery action. There is no real Shopify connection, shipment, refund, cancellation, or production write access.
 
-A local demonstration can create a synthetic paid order, atomically queue its submission, process it in a separate worker, call a warehouse simulator over HTTP, and record the outcome in PostgreSQL.
+## What the six scenarios prove
 
-This is **not** a Shopify integration or live fulfillment service. The simulator is a real local HTTP service whose business responses and stored receipts are fictional. It shares a development PostgreSQL instance for convenience, but the worker does not read the simulator's receipts to infer outcomes.
+| Lab card                      | Provider behavior                                  | Eventual result                                    |
+| ----------------------------- | -------------------------------------------------- | -------------------------------------------------- |
+| An order, acknowledged.       | POST accepts normally                              | Acknowledged; 1 submission, 0 lookups              |
+| An address needs a person.    | POST rejects address                               | Needs review; 1 submission, no retry               |
+| The warehouse is unavailable. | Every POST returns documented retry-safe 503       | Needs review after 3 total submissions             |
+| Accepted. But no answer.      | Receipt committed before delayed POST response     | GET finds original receipt; 1 submission, 1 lookup |
+| Back online on attempt three. | First 2 POSTs return documented 503; third accepts | Acknowledged; 3 submissions, same reference        |
+| No reliable answer yet.       | Receipt committed; POST times out; GET unavailable | Needs review after 3 lookups; 1 submission         |
 
-```text
-Local browser (loopback development server)
-  POST /api/lab { requestId, scenario }
-      |
-      +-- same-origin + explicit development opt-in + input validation
-      |
-      +-- one database transaction:
-      |     order + fulfillment intent + lab run + audit event
-      |     pg-boss job insert using fromDrizzle(tx, sql)
-      |
-      v
-relay_jobs schema / relay-demo-submit queue
-      |
-Separate worker process
-      |
-      +-- per-run session advisory lock
-      +-- commit submission claim and one attempt BEFORE network I/O
-      |
-      v
-Authenticated HTTP call to loopback warehouse simulator
-      |
-      +-- simulator stores successful reference uniquely before replying
-      |
-      v
-Worker commits outcome + exception (if needed) + audit + attempt result
-      |
-      v
-Demo lab polls persisted results; exception queue receives updated data
-```
+The unresolved state may be brief: the UI polls every few seconds and can first display the completed recovery. Expand a run to inspect the audit trail and durable counts. These are simulator results, not evidence of production reliability or saved revenue.
 
-## Four scenarios
+## Recovery policy
 
-| Scenario                | Simulator behaviour                               | Relay outcome                                               |
-| ----------------------- | ------------------------------------------------- | ----------------------------------------------------------- |
-| Normal acceptance       | Stores one receipt and acknowledges its reference | Acknowledged; no new exception                              |
-| Address rejected        | Returns a documented 422 rejection                | Needs review; no business retry                             |
-| Warehouse unavailable   | Returns a documented 503 response                 | Visible unavailable/review exception; no business retry     |
-| Accepted, response lost | Stores a receipt, delays response 3.5 seconds     | Worker times out after 1.5 seconds; outcome remains unknown |
+### Confirmed temporary failure
 
-The connector checks the returned reference and response shape. It does not treat arbitrary 422/503 responses as the documented simulator responses. Transport errors, unexpected responses, mismatched acknowledgements, and malformed payloads all remain unknown. No automatic HTTP retry is hidden inside the connector.
+A generic 503 is **not** permission to retry. The local connector requires an authenticated, reference-matching response declaring `retrySafe: true` and `idempotency: "reference-v1"`. Unexpected, malformed, mismatched, network, and timeout results remain unknown.
 
-An accepted-but-timed-out order has a real simulator receipt, but Relay has no acknowledged warehouse reference. That discrepancy is the point of the scenario. Reference lookup and reconciliation come in increment 004.
+At most **3 submissions total**, including the initial attempt. Retry delays are 2s and 4s plus 0–500ms jitter. The policy function caps exponential delay at 10s before jitter; the three-submission budget stops this flow before that cap. Retry claims reuse the original reference and immutable demo-order payload. The simulator serializes requests by reference, records their payload fingerprint and POST count, rejects changed payloads, and keeps a unique receipt.
 
-## The important durability boundaries
+### Unknown outcome
 
-### Order and queue job are one transaction
+Unknown submissions never authorize another POST. The worker schedules an authenticated GET of the **original reference** after 3s:
 
-`createRun` sends the pg-boss insert through its Drizzle transaction using pg-boss's supported adapter. A test throws after the queue insert and verifies that neither the job nor the order survives rollback. This avoids the gap between committing an order and separately enqueueing it.
+- Matching positive evidence confirms acceptance and resolves the exception.
+- A valid matching 404 escalates: “not found” does not exclude an in-flight or late-accepted request.
+- Unavailable or invalid lookup evidence permits another GET, within a **3-lookup total** budget; subsequent delays are 2s and 4s plus jitter.
+- Exhaustion stops automation and leaves a visible review reason. Budgets are not reset by reloads, worker restarts, scanner ticks, or operator clicks.
 
-The caller supplies a UUID request ID. Reusing that ID with the same scenario returns the existing run; using it with a different scenario returns 409. Concurrent duplicate requests produce one order and one job. The UI retains an unconfirmed request ID and offers **Retry same request** after a lost response. It also retains that ID in session storage across tab reload/navigation when storage is available. This is bounded request deduplication, not a universal exactly-once guarantee.
+Counts represent durable claims made **before** HTTP. A crash before sending may consume a claim without an actual request; the UI deliberately counts the conservative claim rather than inventing knowledge of external execution.
 
-### Queue redelivery is not permission to resubmit
+An address rejection stops at human review. Corrected-address submission is not implemented. There is no force-submit or force-retry endpoint.
 
-A durable claim and attempt are committed before HTTP submission. If the worker restarts and finds that claim without a recorded outcome, it marks the order unknown and makes **no new warehouse request**.
+### Periodic reconciliation
 
-This deliberately includes the ambiguous case where a worker might have died before actually sending the request. Without evidence, it is safer to surface uncertainty than risk two fulfillments.
+The worker runs a persisted minutely pg-boss schedule and requests a startup scan. The scan is bounded to 100 lab runs; it does not process the original seeded examples or real store orders.
 
-A session advisory lock serializes concurrent handlers for the same run. Terminal runs are no-ops on duplicate delivery. The simulator also has a durable unique-reference constraint and rejects a changed payload for an already-accepted reference.
+- Interrupted `running` claims older than 30s become unknown and get a lookup.
+- A pending recovery action overdue by more than 30s is re-armed with a **new delivery ID**. Old callbacks cannot claim it.
+- Historical unresolved Patch 003 runs with no pending action get lookup only. Old unavailable outcomes are not retroactively given business retry permission.
+- Escalated runs are not re-armed. No budget is reset.
 
-### Infrastructure retries are distinct from business retries
+The per-run lock protects active HTTP operations from the scanner. The minute interval is a backstop cadence, not a hard 60-second completion SLA: workers must be available and queue/database delays also apply. Initially queued work relies on the durable submission queue and infrastructure redelivery; the scanner does not blindly replay an exhausted initial job.
 
-pg-boss allows up to 3 redeliveries for worker/infrastructure failures, with a 2-second delay. The default active-job lease is 20 seconds; supervision runs every 5 seconds. A genuinely killed process may therefore take several tens of seconds to be redelivered after restarting the worker.
+## Durable boundaries
 
-Address rejection, documented unavailability, and uncertain submission outcomes are recorded business outcomes. Their queue jobs complete after the outcome is persisted. **Queue state `completed` does not mean the warehouse fulfilled or even accepted the order.** Read the run outcome and audit trail.
+### Atomic state, audit, and queue insertion
 
-Queue errors exhausting delivery attempts are shown as `failed` in the lab when the retained job record is available. A stale running/queued application record can remain after infrastructure exhaustion; there is no automatic replay button yet. Completed queue records are retained for 24 hours, pending ones for 7 days. Application runs and audit events have no automatic deletion in this increment. `not retained` is not a successful outcome.
+Initial run creation inserts the order and pg-boss job in one Drizzle transaction. Recovery scheduling similarly commits pending action, action UUID, due time, audit event, and pg-boss job together through the supported transaction adapter. Tests force enqueue failure and check rollback.
 
-The tests launch actual worker subprocesses. One test stops/restarts a worker around queued work. Another uses SIGKILL after the simulator has accepted a submission, uses a shortened test-only lease, restarts the worker, and verifies one receipt and no second claimed attempt.
+Creation uses a caller-supplied UUID. The same ID/scenario returns the existing run; a different scenario conflicts. The UI retains an unconfirmed UUID and offers **Retry same request**, including across reloads when session storage is available. This retries creation of the same run, not warehouse submission.
 
-## Local-only execution boundary
+### Claims and delivery fencing
 
-Production builds **always** disable `/api/lab`, even if the opt-in flag is set. Fixture mode also disables it. Development requires all of:
+A session advisory lock serializes handlers for each run across the claim, HTTP call, and outcome write. Database row locks serialize state/audit updates. A retry requires the current action UUID, due time, prior documented unavailable result, retry-authorized domain state, and remaining budget. Each attempt has a unique job ID and `(run, attempt number)`.
 
-- `NODE_ENV=development` (set by Next.js dev).
-- `RELAY_DATA_SOURCE=database`.
-- `RELAY_ENABLE_DEMO_RUNS=true`.
-- Exact configured loopback Host/Origin; mutation requests require Origin.
-- Compatible browser fetch-site metadata, JSON content type, a bounded 4 KiB body, and a strictly validated UUID/scenario payload.
+Duplicate terminal callbacks do nothing. An interrupted delivery can affect only its own latest claim; an old original job cannot interrupt a newer retry. An interrupted claim authorizes lookup, not another POST. The simulator uses a separate provider-side reference lock.
 
-These are local-development and browser-CSRF safeguards, **not production authentication**. The web server must bind to loopback; both `npm run dev` and `npm run demo:dev` now do so by default. Do not override the bind address or proxy the enabled lab to a public host. A local process capable of spoofing HTTP headers is not treated as an untrusted authenticated user by this development setup.
+These checks are **not a universal exactly-once external execution guarantee**. The current reference/idempotency contract belongs to the local simulator. Any real connector must establish its own documented guarantees and eligibility rules.
 
-The simulator binds to `127.0.0.1` and requires a generated bearer token. Its token and base URL are server-side only, never `NEXT_PUBLIC_` values. The worker uses the simulator URL directly; the user's browser uses only same-origin API paths. The worker and simulator refuse production mode or a missing opt-in. Defaults use `http://127.0.0.1:4010`; keep that address unless deliberately reconfiguring the local port.
+### Infrastructure versus business retry
 
-The producer is capped at 100 total local lab runs to bound the demonstration dataset. It is not production-grade rate limiting. Do not drop a database containing evidence just to bypass that cap.
+pg-boss allows up to 3 redeliveries for infrastructure failures with a 2s delay. Active-job expiry is 20s and supervision runs every 5s. Business outcomes are recorded and their jobs complete; **queue completion does not mean fulfillment or warehouse acceptance**.
 
-## Upgrade and setup
+Completed jobs are retained for 24 hours and pending jobs for 7 days. Application runs/audit records are not automatically deleted. `not retained` is not success. The lab shows the initial submission queue state separately from the currently pending recovery job; the audit preserves previous actions after pending metadata is cleared.
 
-Use Node.js **22.12 or newer**; the pinned pg-boss release requires it. The latest Node 22 via `.nvmrc` is suitable.
+## Local-only API and simulator boundary
 
-Stop an existing Next.js dev process before applying the patch/installing dependencies. Existing PostgreSQL data is retained: the application migration adds three tables and two enums. pg-boss manages its own separate `relay_jobs` schema through `queue:init`. Do not edit previously applied migrations.
+`/api/lab` and POST `/api/lab/reconcile` are disabled in production and fixture mode, even with an opt-in flag. Development execution requires:
+
+- `NODE_ENV=development`, database mode, and `RELAY_ENABLE_DEMO_RUNS=true`.
+- Exact configured loopback Host/Origin; mutations require Origin.
+- Compatible fetch-site metadata, JSON, a bounded 4 KiB body, and strict payload validation.
+
+`POST /api/lab/reconcile` accepts only `{ "runId": "<UUID>" }`. It coalesces a permitted **read-only lookup** for a demo-store run. It cannot reset budgets, modify an address, or override review. Concurrent active work can return 409; it is not permission to submit again. The UI offers Check warehouse only where such a lookup may be requested; automatic recovery normally means there is already a pending action.
+
+These checks are **local development / CSRF safeguards, not authentication**. Keep the enabled lab bound to loopback. Do not expose it with a public proxy. A local process capable of spoofing headers is outside this development threat model.
+
+The simulator binds to `127.0.0.1`, requires a server-only bearer token, and uses PostgreSQL for receipts/request identity. The worker uses authenticated HTTP GET/POST; it never reads simulator tables as a back door. Redirects are rejected. The browser uses only same-origin API paths. Worker/simulator refuse production mode or missing opt-in.
+
+The lab is capped at 100 runs and shows the latest 10. This is not production rate limiting; do not delete evidence to bypass it.
+
+## Upgrade from 003 (preserve data)
+
+Use Node **22.12+**. Stop the web app, worker, and simulator before applying 004. Do not mix old workers/simulators with the new schema. Keep PostgreSQL running.
+
+After `git am`:
 
 ```bash
 npm ci
-npm run db:up
 npm run db:migrate
-npm run db:seed
 npm run queue:init
-npm run demo:configure
 ```
 
-`demo:configure` writes only managed local-demo settings into the ignored `.env.local`, preserving unrelated entries and retaining an existing suitable simulator token. It enables database mode locally. It does not overwrite database credentials or print its secret. `.env.local` takes precedence over `.env`; already-exported shell variables still take precedence over both. Restart all processes after changing settings.
+Migration `0002_safe_recovery.sql` preserves existing rows and audit history. It adds recovery fields and a simulator request ledger, expands scenarios, and backfills old attempts as number 1 with their original run ID as job ID. The new ledger counts requests handled by the new simulator; it does not reconstruct historical POST traffic. No reset or reseed is needed. Do not edit old migrations or use `drizzle-kit push`.
 
-Open three terminals, each in the project root:
+Existing `.env` / `.env.local` settings and token still work. Only run `npm run demo:configure` if local execution has not been configured. It retains suitable tokens and unrelated settings without printing secrets. Exported shell variables override `.env.local`, which overrides `.env`.
+
+For a fresh installation, use the full README setup (database, migrations, seed, queues, local configuration).
+
+Start three terminals from the project root:
 
 ```bash
 # Terminal 1
@@ -125,30 +120,18 @@ npm run worker
 npm run demo:dev
 ```
 
-Open **http://localhost:3000** exactly (the default configured origin). The CLI may print `127.0.0.1`; that is the binding address, but it is not the configured browser origin. If you intentionally choose another origin/port, update `RELAY_DEMO_ORIGIN` in `.env.local` and restart Next.js. Do not remove the origin checks to work around a mismatch.
+Open **http://localhost:3000** exactly. The CLI binding address `127.0.0.1` is not the default configured browser origin. Deliberate origin changes require updating `RELAY_DEMO_ORIGIN` and restarting Next.js—not removing validation.
 
-## Demonstration flow
+## Demonstration and verification
 
-1. Open Demo lab and run **An order, acknowledged**. Expect Acknowledged and one warehouse reference.
-2. Run the rejected-address and unavailable scenarios. Expect new exceptions, not automatic warehouse retries.
-3. Run **Accepted. But no answer**. Expect Outcome unknown, one claimed attempt, and no acknowledged warehouse reference.
-4. Expand a run to inspect its queue state and event trail. Recent runs shows the latest 10.
-5. Visit Exceptions. The new failure records are present alongside the preserved seed examples.
-6. Stop only the worker. Create another demo run. It should stay Queued.
-7. Restart the worker. The persisted run should be processed without recreating it.
+1. Run **Accepted. But no answer.** Expect Acknowledged, 1/3 submissions, 1/3 lookups, and **Original fulfillment recovered** in the audit.
+2. Run **Back online on attempt three.** Expect two scheduled retries, then acknowledgement with 3/3 submissions.
+3. Run the persistent outage and failed-lookup cases. Each stops at its respective budget with a review reason.
+4. Run the address case. It must not schedule an unchanged-input retry.
+5. Stop the worker, create a run, and restart. Queued work survives. Existing recovery due times also survive restarts.
+6. Inspect Exceptions and recent-run audit history. Recovered exceptions are resolved; unresolved ones remain visible.
 
-The UI polls while the lab is visible, stops polling on unmount/hidden tabs, and labels failed reads as potentially stale. Read time is not a worker-health indicator. Filters/navigation remain client state. Original seed examples retain their original timestamps; newer worker events advance the data observation time, so old examples can have larger displayed ages.
-
-For the provider side of the timeout scenario, you may inspect **local synthetic receipts only**:
-
-```bash
-docker compose exec -T db psql -U relay -d relay_ops -c \
-  "SELECT reference, warehouse_reference, accepted_at FROM simulator_receipts ORDER BY accepted_at DESC LIMIT 10;"
-```
-
-This inspection is diagnostic evidence, not an implementation of reconciliation. The worker does not use this table as a back door.
-
-## Verification
+Polling stops on hidden/unmounted lab views. Failed reads are labelled potentially stale. Browser refresh does not drive background recovery. Original seed timestamps are preserved; new events advance observation time, so old examples can display larger ages.
 
 ```bash
 npm run lint
@@ -158,23 +141,23 @@ npm run test:db
 npm run build
 ```
 
-Expected: 33 unit tests and 24 PostgreSQL/integration tests. The database suite now also creates/deletes jobs, clears the new Relay and simulator tables, and launches short-lived local worker processes. It only runs against the explicitly supplied, disposable, loopback `_test` database. Never point it at valuable data. Don't run multiple copies of the database suite against the same test database.
+Expected: **38 unit tests and 39 PostgreSQL/integration tests**. The suite covers 12 persistence cases, 13 execution cases, and 14 recovery cases: transactional enqueue, six provider paths, retry/lookup budgets, stale and concurrent delivery, interrupted newer claims, operator coalescing, scan repair, rollback, SQL bounds, and the persisted cron schedule. Actual worker subprocess tests exercise queued restart, SIGKILL after acceptance, and persisted delayed retries across restart. Most isolated policy tests accelerate due timestamps; the worker-restart test and browser checks use real delays.
 
-The initial 12 persistence tests remain; 12 execution tests cover transactional enqueue, duplicate request identity, all four outcomes, duplicate/concurrent delivery, interrupted claims, simulator authentication/idempotency, queued restart, and actual killed-worker recovery. GitHub Actions is configured to run these checks; inspect the remote run after pushing rather than assuming it passed.
+**Database tests truncate the dedicated test database's application/simulator tables and delete queue jobs.** Require a disposable loopback `_test` database different from the app database. Do not run concurrent test suites against it. GitHub Actions is configured to run core checks; inspect the actual remote result after pushing.
 
-## Stopping and failure diagnosis
+## Operations and diagnosis
 
-Ctrl+C each process independently. The worker attempts graceful shutdown and waits for its current submission. Stopping a process does not delete jobs, receipts, or application records. `npm run db:stop` retains the Docker volume. Never use `docker compose down -v` as a routine patch step.
+Ctrl+C each process separately. The worker attempts to finish active jobs. Records/jobs survive restart; `npm run db:stop` retains the Docker volume. Never use `docker compose down -v` as a patch step.
 
-- **Execution disabled:** use development mode, run `demo:configure`, and restart Next.js. `npm start` is deliberately read-only.
-- **Lab API 403:** use the exact configured localhost origin. Check flags; do not disable validation.
-- **Lab unavailable / 503:** confirm PostgreSQL, migrations, seed, and `queue:init` succeeded.
-- **Run stays queued:** inspect the worker terminal. A queued row proves persistence, not worker liveness.
-- **Unexpected outcome unknown:** inspect simulator availability and matching server-only token; a connection failure is deliberately not treated as safe-to-resubmit.
-- **Worker fails to start after an upgrade:** check Node version (22.12+), queue installation, and environment variables. Do not reset its database.
-- **Pending request after a browser error:** use Retry same request; it reuses the UUID even if the original response was lost after commit.
-- **State updates appear stale:** use Refresh and inspect any read-error notice; background jobs do not depend on polling.
+- **403 / execution disabled:** use development mode and the exact origin; check flags and restart. Production is deliberately read-only.
+- **503 / lab unavailable:** check PostgreSQL, migrations, queue installation, and worker logs. Do not reset the database.
+- **Queued / scheduled remains unchanged:** inspect worker availability and displayed due time. A persisted job is not proof a worker is running.
+- **Unknown then review:** inspect simulator availability and matching server-only token. Network failure is not safe-to-resubmit evidence.
+- **Budgets exhausted / not found:** automation deliberately stopped. No implemented correction/override workflow exists.
+- **Historical 003 records change on startup:** unresolved lab runs are being checked by GET. Seed-only examples remain inert.
+- **Initial creation response lost:** Retry same request retains the UUID; do not create a different run to “retry” the same order.
+- **Node/queue startup error:** use Node 22.12+, run migration and queue initialization, then restart all processes.
 
 ## Still deferred
 
-No real Shopify events, actual payments, actual shipment creation, automatic business retry policy, automatic reconciliation, manual address correction, refund/cancellation actions, or production authentication. Those remain deliberate boundaries rather than hidden TODOs in a supposedly complete product.
+Real Shopify ingestion and eligibility, authenticated/authorized operators, corrected-address actions, arbitrary-provider recovery guarantees, webhook ordering/missed-event ingestion, production deployment/monitoring, refunds, cancellations, and actual shipment creation. Read-only production previews remain synthetic and unauthenticated.

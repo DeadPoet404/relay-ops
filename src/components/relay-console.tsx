@@ -173,7 +173,7 @@ export function RelayConsole({ data: initialData }: { data: ConsoleData }) {
         >
           <FlaskConical size={18} strokeWidth={1.7} />
           <span>Demo lab</span>
-          <span className="tiny-label">03</span>
+          <span className="tiny-label">04</span>
         </button>
         <div className="sidebar-bottom">
           <div className="build-note">
@@ -281,7 +281,7 @@ export function RelayConsole({ data: initialData }: { data: ConsoleData }) {
               </strong>{" "}
               Synthetic data only. No live customer orders.
             </span>
-            <span className="banner-version">EXECUTION / 003</span>
+            <span className="banner-version">RECOVERY / 004</span>
           </div>
           {view === "exceptions" && (
             <>
@@ -320,7 +320,7 @@ export function RelayConsole({ data: initialData }: { data: ConsoleData }) {
                 <Metric
                   label="Retry scheduled"
                   value={String(retryCount).padStart(2, "0")}
-                  detail="Seed retry states · not active jobs"
+                  detail="Includes fixed seed examples"
                   icon={<Clock3 size={17} />}
                 />
                 <Metric
@@ -688,11 +688,11 @@ export function RelayConsole({ data: initialData }: { data: ConsoleData }) {
                 <div className="drawer-bottom">
                   <div className="disabled-action-note">
                     <Info size={14} />
-                    <span>Preview only. No live warehouse is connected.</span>
+                    <span>Simulator only. No live warehouse is connected.</span>
                   </div>
                   <button className="button button-primary" disabled>
                     <ShieldCheck size={16} />
-                    Recovery actions arrive in a later increment
+                    Inspect automatic recovery in the local Demo lab
                   </button>
                 </div>
               </>
@@ -721,7 +721,7 @@ export function RelayConsole({ data: initialData }: { data: ConsoleData }) {
             <span className="about-mark">
               <ShieldCheck size={25} />
             </span>
-            <div className="eyebrow">RELAY · INCREMENT 003</div>
+            <div className="eyebrow">RELAY · INCREMENT 004</div>
             <Dialog.Title>
               A little clarity between
               <br />
@@ -986,7 +986,7 @@ function DemoView({
             Run an order through failure. Inspect the evidence it leaves behind.
           </p>
         </div>
-        <span className="subtle-chip">Simulator / worker / audit</span>
+        <span className="subtle-chip">Submit / investigate / recover</span>
       </section>
       <ExecutionLab enabled={enabled} onData={onData} />
       <div className="lab-notice">

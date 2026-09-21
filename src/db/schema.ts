@@ -138,6 +138,8 @@ export const labScenario = pgEnum("lab_scenario", [
   "address_rejected",
   "unavailable",
   "accepted_timeout",
+  "temporary_outage",
+  "lookup_unavailable",
 ]);
 export const labRunState = pgEnum("lab_run_state", [
   "queued",
@@ -162,8 +164,21 @@ export const labRuns = pgTable(
     status: labRunState("status").notNull().default("queued"),
     createdAt: time("created_at").notNull(),
     completedAt: time("completed_at"),
+    pendingAction: text("pending_action").$type<"retry" | "lookup">(),
+    pendingActionId: uuid("pending_action_id"),
+    nextActionAt: time("next_action_at"),
+    lookupCount: integer("lookup_count").notNull().default(0),
+    reviewReason: text("review_reason"),
   },
   (table) => [
+    check(
+      "pending_recovery_consistent",
+      sql`(${table.pendingAction} IS NULL AND ${table.pendingActionId} IS NULL AND ${table.nextActionAt} IS NULL) OR (${table.pendingAction} IS NOT NULL AND ${table.pendingAction} IN ('retry','lookup') AND ${table.pendingActionId} IS NOT NULL AND ${table.nextActionAt} IS NOT NULL)`,
+    ),
+    check(
+      "lookup_budget_bound",
+      sql`${table.lookupCount} >= 0 AND ${table.lookupCount} <= 3`,
+    ),
     index("lab_runs_store_created_idx").on(table.storeId, table.createdAt),
     check(
       "lab_completion_consistent",
@@ -178,13 +193,19 @@ export const submissionAttempts = pgTable(
     id: uuid("id").primaryKey().defaultRandom(),
     runId: uuid("run_id")
       .notNull()
-      .unique()
       .references(() => labRuns.id),
+    attemptNumber: integer("attempt_number").notNull().default(1),
+    jobId: uuid("job_id").notNull().unique(),
     startedAt: time("started_at").notNull(),
     completedAt: time("completed_at"),
     result: text("result").notNull().default("pending"),
   },
   (table) => [
+    unique("attempt_run_number_unique").on(table.runId, table.attemptNumber),
+    check(
+      "submission_budget_bound",
+      sql`${table.attemptNumber} >= 1 AND ${table.attemptNumber} <= 3`,
+    ),
     check(
       "attempt_result_known",
       sql`${table.result} IN ('pending','accepted','rejected','unavailable','unknown','interrupted')`,
@@ -201,3 +222,16 @@ export const simulatorReceipts = pgTable("simulator_receipts", {
   fingerprint: text("fingerprint").notNull(),
   acceptedAt: time("accepted_at").notNull().defaultNow(),
 });
+
+export const simulatorRequests = pgTable(
+  "simulator_requests",
+  {
+    reference: text("reference").primaryKey(),
+    fingerprint: text("fingerprint").notNull(),
+    scenario: labScenario("scenario").notNull(),
+    submissionCount: integer("submission_count").notNull().default(0),
+  },
+  (table) => [
+    check("simulator_count_nonnegative", sql`${table.submissionCount} >= 0`),
+  ],
+);

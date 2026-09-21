@@ -1,8 +1,8 @@
 import { createServer, type ServerResponse } from "node:http";
 import { createHash, timingSafeEqual } from "node:crypto";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import type { Database } from "../db/client";
-import { simulatorReceipts } from "../db/schema";
+import { simulatorReceipts, simulatorRequests } from "../db/schema";
 import { submissionSchema } from "./protocol";
 
 function json(response: ServerResponse, code: number, body: object) {
@@ -32,6 +32,30 @@ export function createSimulator(
           service: "relay-warehouse-simulator",
           simulated: true,
         });
+      if (req.method === "GET" && req.url?.startsWith("/fulfillments/")) {
+        const reference = decodeURIComponent(
+          req.url.slice("/fulfillments/".length),
+        );
+        if (!/^relay-lab-[0-9a-f-]{36}$/.test(reference))
+          return json(res, 400, { error: "INVALID_REFERENCE" });
+        const [request] = await db
+          .select()
+          .from(simulatorRequests)
+          .where(eq(simulatorRequests.reference, reference));
+        if (request?.scenario === "lookup_unavailable")
+          return json(res, 503, { code: "LOOKUP_UNAVAILABLE", reference });
+        const [receipt] = await db
+          .select()
+          .from(simulatorReceipts)
+          .where(eq(simulatorReceipts.reference, reference));
+        return receipt
+          ? json(res, 200, {
+              accepted: true,
+              reference,
+              warehouseReference: receipt.warehouseReference,
+            })
+          : json(res, 404, { code: "REFERENCE_NOT_FOUND", reference });
+      }
       if (req.method !== "POST" || req.url !== "/fulfillments")
         return json(res, 404, { error: "NOT_FOUND" });
       if (!req.headers["content-type"]?.startsWith("application/json"))
@@ -58,27 +82,38 @@ export function createSimulator(
           }),
         )
         .digest("hex");
-      // Each successful reference is stored once, before the response is sent.
+      // Provider-side request count and idempotency are durable. Only HTTP exposes
+      // these outcomes to Relay; the worker never queries simulator tables.
       const reply = await db.transaction(async (tx) => {
-        const inserted =
-          data.scenario === "address_rejected" ||
-          data.scenario === "unavailable"
-            ? []
-            : await tx
-                .insert(simulatorReceipts)
-                .values({ reference: data.reference, fingerprint })
-                .onConflictDoNothing()
-                .returning();
-        const receipt =
-          inserted[0] ??
-          (
-            await tx
-              .select()
-              .from(simulatorReceipts)
-              .where(eq(simulatorReceipts.reference, data.reference))
-          )[0];
-        if (receipt && receipt.fingerprint !== fingerprint)
+        await tx.execute(
+          sql`select pg_advisory_xact_lock(hashtextextended(${data.reference}, 7304))`,
+        );
+        const [receipt] = await tx
+          .select()
+          .from(simulatorReceipts)
+          .where(eq(simulatorReceipts.reference, data.reference));
+        const [previous] = await tx
+          .select()
+          .from(simulatorRequests)
+          .where(eq(simulatorRequests.reference, data.reference));
+        if (
+          (receipt && receipt.fingerprint !== fingerprint) ||
+          (previous && previous.fingerprint !== fingerprint)
+        )
           return { code: 409, body: { error: "REFERENCE_PAYLOAD_MISMATCH" } };
+        const count = (previous?.submissionCount ?? 0) + 1;
+        await tx
+          .insert(simulatorRequests)
+          .values({
+            reference: data.reference,
+            fingerprint,
+            scenario: data.scenario,
+            submissionCount: count,
+          })
+          .onConflictDoUpdate({
+            target: simulatorRequests.reference,
+            set: { submissionCount: count },
+          });
         if (receipt)
           return {
             code: 200,
@@ -88,20 +123,42 @@ export function createSimulator(
               warehouseReference: receipt.warehouseReference,
             },
           };
-        return data.scenario === "address_rejected"
-          ? {
-              code: 422,
-              body: { code: "ADDRESS_REJECTED", reference: data.reference },
-            }
-          : {
-              code: 503,
-              body: {
-                code: "TEMPORARY_UNAVAILABLE",
-                reference: data.reference,
-              },
-            };
+        if (data.scenario === "address_rejected")
+          return {
+            code: 422,
+            body: { code: "ADDRESS_REJECTED", reference: data.reference },
+          };
+        if (
+          data.scenario === "unavailable" ||
+          (data.scenario === "temporary_outage" && count < 3)
+        )
+          return {
+            code: 503,
+            body: {
+              code: "TEMPORARY_UNAVAILABLE",
+              reference: data.reference,
+              retrySafe: true,
+              idempotency: "reference-v1",
+            },
+          };
+        const [accepted] = await tx
+          .insert(simulatorReceipts)
+          .values({ reference: data.reference, fingerprint })
+          .returning();
+        return {
+          code: 200,
+          body: {
+            accepted: true,
+            reference: data.reference,
+            warehouseReference: accepted.warehouseReference,
+          },
+        };
       });
-      if (data.scenario === "accepted_timeout" && reply.code === 200) {
+      if (
+        (data.scenario === "accepted_timeout" ||
+          data.scenario === "lookup_unavailable") &&
+        reply.code === 200
+      ) {
         const timer = setTimeout(
           () => json(res, reply.code, reply.body),
           responseDelayMs,

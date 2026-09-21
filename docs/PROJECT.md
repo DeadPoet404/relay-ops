@@ -1,6 +1,6 @@
 # Relay — project brief
 
-> **Current implementation: increment 003.** The console, persistence/domain layer, transactional queue, separate worker, and local HTTP warehouse simulator are implemented. See [EXECUTION.md](EXECUTION.md) for the shipped execution boundary. Real Shopify ingestion, production access control, and safe business retries/reconciliation are still deferred.
+> **Current implementation: increment 004.** The local simulator now supports bounded retries, reference-only reconciliation, durable scheduling, and escalation to human review. See [EXECUTION.md](EXECUTION.md) for the shipped boundary. Real Shopify ingestion, production access control, and address correction remain deferred.
 
 ## Product and audience
 
@@ -34,7 +34,7 @@ Partial acceptance, inconsistent lookup behaviour, and providers without idempot
 - Support keyboard access, mobile inspection, and reduced motion.
 - Do not round away money in production records. The foundation fixtures use whole-dollar USD amounts; later models must preserve currency, minor units, and full display precision.
 
-## Planned architecture (not implemented in increment 001)
+## Target architecture (Shopify and authenticated access remain deferred)
 
 ```text
 Shopify verified webhook
@@ -64,9 +64,9 @@ Scheduled reconciliation --> compare local and provider records
                         --> detect missing/stalled work, investigate safely
 ```
 
-Next.js is the UI and request boundary. The worker is a separate process, not an in-memory timer or a long-running request handler. PostgreSQL supports durable application state and pg-boss jobs, avoiding Redis as an additional initial dependency. Drizzle manages schema/migrations and typed queries. Zod will validate external payloads and server actions.
+Next.js is the UI and request boundary. The worker is a separate process, not an in-memory timer or a long-running request handler. PostgreSQL supports durable application state and pg-boss jobs, avoiding Redis as an additional initial dependency. Drizzle manages schema/migrations and typed queries. Zod validates the implemented request/connector boundaries.
 
-We must verify atomic state-change/enqueue behaviour during implementation. Queue delivery does not establish exactly-once execution at an external provider. Durable submission identities, unique constraints, connector-level idempotency, status lookups, and tested state transitions provide the actual safety properties.
+Atomic application/queue commits and rollback are covered by integration tests. Queue delivery does not establish exactly-once execution at an external provider. Durable submission identities, unique constraints, connector-level idempotency, status lookups, and tested state transitions provide the actual safety properties.
 
 ## Candidate domain entities
 
@@ -98,7 +98,7 @@ A real simulated warehouse endpoint, durable worker jobs, and controlled failure
 
 ### 004 — Safe recovery
 
-Bounded retries, idempotency and ambiguity checks, scheduled reconciliation, concurrency protection, and authorized human actions. Exercise duplicate events, out-of-order events, missed webhooks, accepted-but-timed-out submissions, failed lookups, job crashes, and repeated operator clicks. Add browser workflows and integration tests.
+Shipped for the local simulator: bounded retries, reference lookup, scheduled reconciliation, stale-delivery fencing, concurrent processing protection, and a guarded read-only operator check. Tests exercise accepted-but-timed-out requests, failed lookups, exhausted budgets, duplicate/stale deliveries, atomic scheduling, worker crashes and restart. Browser checks cover six scenarios and mobile layout. Production-authorized human actions, webhook ordering, missed-webhook recovery, and address correction are not implemented in this increment.
 
 ### 005 — Shopify and deployment hardening
 

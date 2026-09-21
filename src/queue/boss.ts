@@ -1,6 +1,8 @@
 import { PgBoss } from "pg-boss";
 
 export const SUBMISSION_QUEUE = "relay-demo-submit";
+export const RECOVERY_QUEUE = "relay-demo-recover";
+export const SCAN_QUEUE = "relay-demo-reconcile-scan";
 export function createBoss(
   url: string,
   mode: "install" | "producer" | "worker" = "producer",
@@ -13,7 +15,9 @@ export function createBoss(
     migrate: mode === "install",
     createSchema: mode === "install",
     supervise: mode === "worker",
-    schedule: false,
+    schedule: mode === "worker",
+    cronWorkerIntervalSeconds: 1,
+    cronMonitorIntervalSeconds: 1,
     superviseIntervalSeconds: 5,
   });
   boss.on("error", () =>
@@ -32,14 +36,17 @@ export async function installQueue(url: string) {
   const boss = createBoss(url, "install");
   try {
     await boss.start();
-    await boss.createQueue(SUBMISSION_QUEUE, {
-      retryLimit: 3,
-      retryDelay: 2,
-      retryBackoff: false,
-      expireInSeconds: 20,
-      retentionSeconds: 604800,
-      deleteAfterSeconds: 86400,
-    });
+    for (const name of [SUBMISSION_QUEUE, RECOVERY_QUEUE, SCAN_QUEUE]) {
+      await boss.createQueue(name, {
+        retryLimit: 3,
+        retryDelay: 2,
+        retryBackoff: false,
+        expireInSeconds: 20,
+        retentionSeconds: 604800,
+        deleteAfterSeconds: 86400,
+      });
+    }
+    await boss.schedule(SCAN_QUEUE, "* * * * *", {});
   } finally {
     await boss.stop();
   }

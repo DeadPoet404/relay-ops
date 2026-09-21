@@ -6,6 +6,8 @@ export const scenarios = [
   "address_rejected",
   "unavailable",
   "accepted_timeout",
+  "temporary_outage",
+  "lookup_unavailable",
 ] as const;
 export const runStates = [
   "queued",
@@ -30,6 +32,12 @@ export interface LabRun {
   reference: string;
   warehouseReference: string | null;
   attemptCount: number;
+  lookupCount: number;
+  nextActionAt: string | null;
+  pendingAction: "retry" | "lookup" | null;
+  pendingActionId: string | null;
+  recoveryJobState?: string;
+  reviewReason: string | null;
   jobState?: string;
   events: TimelineEvent[];
 }
@@ -38,6 +46,8 @@ export const scenarioLabels: Record<Scenario, string> = {
   address_rejected: "Address rejected",
   unavailable: "Warehouse unavailable",
   accepted_timeout: "Accepted, response lost",
+  temporary_outage: "Transient outage, then recovery",
+  lookup_unavailable: "Status lookup unavailable",
 };
 export const runLabels: Record<RunState, string> = {
   queued: "Queued",

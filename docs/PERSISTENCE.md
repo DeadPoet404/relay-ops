@@ -1,6 +1,6 @@
 # Increment 002 — persistence and state model
 
-> Historical design notes for Patch 002. Patch 003 adds a guarded local-demo write endpoint, worker, queue, and simulator; current commands, test counts, and boundaries are documented in [EXECUTION.md](EXECUTION.md) and the README.
+> Historical design notes for Patch 002. Patches 003–004 add guarded local-demo endpoints, a worker, queues, simulator, and safe recovery; current commands, test counts, and boundaries are documented in [EXECUTION.md](EXECUTION.md) and the README.
 
 ## What changed
 
