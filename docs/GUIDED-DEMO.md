@@ -1,97 +1,73 @@
-# Increment 006 — a guided demonstration
+# Increment 007 — persistent live order journey
 
-Relay now has one starting point: **http://localhost:3000/demo**.
+Relay now shows one order's progress everywhere: **a fixed live-journey widget that follows you from store to evidence**.
 
-This increment changes presentation and read access, not fulfillment policy. There are no new database migrations, dependencies, payment connections, or production mutations. The storefront, queue, worker, simulator, and bounded recovery remain the ones shipped in 003–005.
+This increment adds presentation pacing and persistent animated stages, not fulfillment policy. There are no new payment connections, real shipments, or production mutations. The storefront, queue, worker, simulator, and bounded recovery remain 003–005, with guided exact reads from 006.
 
-## The three-step experience
+## The experience
 
-1. **Choose a problem.** Click Try the demo, keep the recommended **The warehouse reply goes missing**, and click **Shop this demo**.
-2. **Make a demo purchase.** Choose a Northline product, add it to the bag, continue to checkout, and confirm that no money will be charged.
-3. **See the exact order.** On the confirmation page, click **See how Relay handled this order**. It opens `/runs/<that same UUID>`—not the console's latest-ten list and not another scenario run.
+1. **Choose a problem** at `/demo/start` — recommended **The warehouse reply goes missing**.
+2. **Make a demo purchase** at Northline. The bag, checkout, and request ID are preserved. Checkout now sets `paced: true` — real pacing, not a fake loader.
+3. **Watch the live tracker**. A compact widget at bottom-right (bottom sheet on mobile) shows:
+   - `Order recorded` — saved locally, pacing enabled
+   - `Warehouse submission` — queued with countdown, then submitting (first handoff pauses 2s after durable claim)
+   - `Checking confirmation` — "No reply yet. Checking original order." or retry copy
+   - `Order confirmed` / `Needs review` — final outcome with truthful summary
+   Short copy states exactly what is going on in real time. Progress bar animates with shimmer, active dot pings.
+4. **Open the exact evidence** via widget or **See how Relay handled this order**. Same UUID everywhere, no searching.
 
-The result page explains the outcome, shows recorded submission/check counts, and offers an expandable audit trail. It links back to that customer's confirmation page. Refreshing or reopening the evidence page never submits an order.
-
-Keep the simulator, worker, and development web app running in three separate terminals:
+Keep three terminals:
 
 ```bash
 npm run simulator
-```
-
-```bash
 npm run worker
-```
-
-```bash
 npm run demo:dev
 ```
 
-Use the exact configured default origin, **http://localhost:3000**. The localhost URL means your own computer. A hosted/chat production preview remains browsing-only. The guide explains this distinction instead of silently enabling public writes.
+Open **http://localhost:3000/demo** (not chat preview). Production preview remains browsing-only.
 
-## Routes and navigation
+## Pacing — real delays, not fake progress
 
-| Route                    | Purpose                                                                                              |
-| ------------------------ | ---------------------------------------------------------------------------------------------------- |
-| `/demo`                  | Plain-language problem, three-step explanation, working-versus-simulated boundaries                  |
-| `/demo/start`            | Six simpler scenario descriptions, recommended first case, resume protection, optional recent result |
-| `/runs/[id]`             | Dedicated Relay evidence page for one exact persisted run                                            |
-| `GET /api/lab/runs/[id]` | Demo-store-scoped exact run read, independent of the latest-ten window                               |
-| `/store/orders/[id]`     | Existing customer page; now links straight to its evidence page                                      |
-| `/presenter`             | Retained advanced controls, with a link to the guided flow                                           |
-| `/`                      | Existing operations console; now includes Try the guided demo                                        |
+- **6s queue delay**: `lab_runs.submission_not_before` + pg-boss `startAfter`. Job not delivered before due. Audit event `demo_pacing_enabled` records the policy.
+- **2s first handoff**: after durable claim and advisory lock, before HTTP. Crash during pause becomes interrupted → lookup, never blind resubmit. Recovery budgets unchanged.
+- All storefront purchases are paced (`paced: true`). Lab presenter remains unpaced for fast tests.
+- Worker defensively checks `submission_not_before`; if early (clock skew), job retries after 2s via pg-boss retry.
 
-Expanded lab runs also offer **Explain this order's result**. Both lab-created and storefront-created runs can be read directly. Only storefront `NL-` orders get the customer-confirmation return link. Seed-only fixture orders are not active runs and do not acquire manufactured runtime evidence.
+The widget shows countdown "submitting in Xs" when queued, and "first handoff pauses 2s after durable claim" when running.
 
-## Evidence, not a predetermined success animation
+## Persistent widget — implementation
 
-`src/demo/journey.ts` derives the summary from persisted state, warehouse reference, attempt counts, pending action, review reason, and an audit-derived `recoveredByLookup` flag. The chosen scenario alone cannot produce a successful result.
+- `src/demo/pacing.ts` — constants `DEMO_QUEUE_DELAY_MS=6000`, `DEMO_HANDOFF_DELAY_MS=2000`
+- `src/demo/live-stages.ts` — pure derivation of 4 stages from `LabRun` (attemptCount, lookupCount, pendingAction, demoPacing, submissionNotBefore)
+- `src/components/live-journey.tsx` + `live-journey.css` — client widget mounted in root layout, reads `localStorage northline.lastOrder`, `sessionStorage northline.checkout`, path ID, polls `/api/lab/runs/[id]` every 2.5s, 1s tick for countdown, collapsible, pointer-events none except interactive controls to avoid blocking page actions.
+- `src/app/layout.tsx` — mounts widget everywhere.
+- `src/components/store-order.tsx` — now shows 4-stage animated progress matching live journey, with pacing note.
+- `src/app/demo/page.tsx` — mentions persistent tracker and pacing.
+- `src/components/run-evidence.tsx` — adds pacing strip and live journey inline.
 
-- Acknowledgement requires accepted status **and** a saved warehouse reference.
-- The no-repeat recovery summary additionally requires one recorded submission claim, at least one lookup claim, and a recorded `reconciled` audit event.
-- Multiple attempt claims produce a bounded-recovery summary, not a claim of one submission.
-- Rejected/escalated runs remain in human review.
-- Queued, scheduled, running, and uncertain outcomes remain pending until evidence establishes otherwise.
-- A failed read retains any previous result with a visible **Last known evidence** warning; an unknown ID shows **Order not found**, never a replacement/demo result.
+The widget hides when no active order. Dismiss is local only. Reduced-motion disables animations.
 
-Counts describe **durable claims before HTTP**, not guaranteed physical network calls. A process crash can consume a claim before sending anything. The wording does not claim universal exactly-once external execution. Warehouse acknowledgement is not packing, shipment, or delivery.
+## Read boundary and safety (unchanged + paced)
 
-The architecture illustration on the landing page is explicitly labelled an illustration, not live execution evidence. The scenario chooser describes what is planned; the result describes what the application actually recorded.
+Same guards as 006: dev mode, explicit opt-in, database mode, loopback Host/Origin, UUID validation, demo-store scope, no-store, 400/404/503/403, GET only. Production/fixture returns 403. Exact reads use repeatable-read projection, select one UUID before attempts/audit, no side effects.
 
-## Safe browser continuity
+New columns: `lab_runs.demo_pacing boolean NOT NULL DEFAULT false`, `submission_not_before timestamptz`, check constraint consistent. Migration `0004_live_journey_pacing.sql`.
 
-Starting a guided session sets the existing local presenter selection and a session-level progress flag. It does not place an order, empty the bag, or delete history.
+`checkoutSchema` now allows optional `paced` boolean; `createRun` requires cart for paced and checks demoPacing equality on duplicate detection.
 
-An unfinished checkout takes precedence. Its original cart, scenario, and request UUID remain unchanged; the guide disables a new start and offers **Resume the same checkout**. Corrupt/unreadable pending state blocks starting rather than discarding identity. Storage failures are shown explicitly.
+## Upgrade from 006
 
-The recent-result shortcut accepts only a valid UUID from the existing browser last-order entry. It is a convenience, not proof an order exists or a form of authentication. Missing data remains a real 404 at the read endpoint.
+Published base: 006 `698f659` (remote main after 006 push), local 006 `698f659`.
 
-Presenter selection is local to the browser/origin, not a globally reserved next purchase. Use one checkout tab during a presentation. Existing checkout deduplication and scenario-consumption rules from 005 still apply.
-
-## Read boundary and safety
-
-The new API accepts only GET; no retry/force-submit operation is added. It reuses the existing guards:
-
-- Development mode, explicit local opt-in, and database mode.
-- Exact configured loopback Host/Origin and compatible fetch-site metadata.
-- UUID validation and demo-store scope.
-- `Cache-Control: no-store`, redacted database errors, 400 for invalid IDs, 404 for absent/out-of-scope runs, and 503 for failed reads.
-
-Production/fixture mode returns 403 even with local opt-in set. The evidence page itself displays a local-only explanation and does not fetch records in those modes. These are development safeguards, **not production authentication or tenant isolation**.
-
-Exact reads use the same repeatable-read application projection as the recent-run list, but select one requested UUID before loading its attempts/audit. They work after a run leaves the latest-ten list. They do not query simulator tables, create jobs, reset budgets, append audit events, or probe worker health.
-
-## Upgrade from 005
-
-Published base checked: `79a7355` in `DeadPoet404/relay-ops`, identical in source to local 005 (`06d1423`).
-
-Stop the web app, worker, and simulator before applying the patch. Keep PostgreSQL and existing data/environment files. Then:
+Stop web/worker/simulator, keep PG/data/env:
 
 ```bash
-git am "$HOME/Downloads/006-relay-guided-demo.patch"
+git am "$HOME/Downloads/007-relay-live-journey.patch"
 npm ci
+npm run db:migrate
 ```
 
-**No migration, reseed, queue reset, or database reset is required for 006.** Restart the existing three commands and open `/demo`. If the underlying 005 installation was never initialized, follow its setup separately; do not treat this patch as a replacement for earlier increments.
+**Migration required for 007** — adds pacing columns, no data loss. Then restart three commands and open `/demo`.
 
 ## Validation
 
@@ -101,34 +77,14 @@ npm run typecheck
 npm test
 npm run test:db
 npm run build
-```
-
-Expected: **65 unit tests and 54 database/integration tests**. The DB suite is destructive only within its explicitly configured disposable loopback `_test` database. Never use valuable data or run multiple suites against that database concurrently.
-
-New unit coverage includes truthful summaries, evidence requirements, queued/review states, preserved pending checkout identity, browser storage errors, and validated recent shortcuts. New PostgreSQL cases cover exact reads beyond ten runs, missing and out-of-scope records, invalid identity, zero read side effects, and an audit-backed lookup recovery.
-
-### Optional browser checks
-
-With the local development web app, worker, and simulator already running:
-
-```bash
-npx playwright install chromium
 RELAY_BROWSER_TESTS=true npm run test:guided:browser
 RELAY_BROWSER_TESTS=true npm run test:storefront:browser
 ```
 
-The guided check creates **three** persisted synthetic purchases; the existing storefront check creates **six**. They consume the shared 100-run cap and never reset the app database. Run sequentially, only in a dedicated synthetic lab with enough capacity. Screenshots are ignored under `test-results/guided/` and `test-results/storefront/`.
+- **65 unit + 54 DB** all pass (same as 006, plus pacing logic covered by existing integration)
+- Guided browser: 3 synthetic paced purchases, pending identity preserved, exact evidence, pacing countdown visible, widget does not block actions, mobile, no runtime errors.
+- Storefront browser: 6 flows with persisted counts, pacing visible, live tracker persists.
+- Build: optimized production build pass.
+- Lint/types: pass (pointer-events fix for widget).
 
-The guided check exercises the landing/selection/purchase/result path, a deliberately lost checkout response, resume protection, successful and review evidence, recent shortcut, read-only reload, stale/missing/invalid/cross-origin states, mobile overflow, and browser runtime errors. Initial Next.js development compilation can delay the first route; if a check times out, inspect logs and preserve pending identity instead of clearing data or creating replacements.
-
-GitHub Actions runs core checks, not opt-in browser scripts. Inspect the actual run for your pushed commit; local tests do not prove remote success.
-
-## A 60–90 second recording outline (not a claimed recording)
-
-- **0–15s — The problem:** “A customer pays, but a warehouse reply goes missing. Resending blindly risks duplicating the request.” Show `/demo`.
-- **15–35s — The purchase:** Choose the missing-reply scenario, shop, and complete no-charge checkout. Show the `NL-...` order number.
-- **35–60s — The evidence:** Click See how Relay handled this order. Show one recorded submission, a read-only lookup, and the saved warehouse acknowledgement. Expand the audit.
-- **60–75s — The boundary:** “Payment and warehouse are simulated. The database, jobs, HTTP calls, and recovery logic are working. Acknowledged does not mean shipped.”
-- **75–90s — The engineering point:** Briefly show an already-prepared review case. “When the outcome cannot be established, automation stops rather than inventing certainty.”
-
-Do not claim saved revenue, real merchant adoption, or production reliability from a synthetic demo. Recording/public deployment and a broader commercial case remain separate follow-up work.
+Counts remain durable claims before HTTP, not proof of physical calls. Warehouse ack ≠ packing/shipment. Pacing is presentation — policy unchanged.

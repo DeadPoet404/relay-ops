@@ -58,6 +58,7 @@ export function StoreCheckout({ enabled }: { enabled: boolean }) {
           requestId: crypto.randomUUID(),
           scenario: chosen.success ? chosen.data : "accepted",
           items: cart,
+          paced: true,
         };
         // Persist the identity BEFORE making a request; an uncertain response must
         // retry this exact request, including after a reload, never another order.

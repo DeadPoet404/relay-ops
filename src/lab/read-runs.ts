@@ -55,6 +55,8 @@ async function readRows(db: Database, id?: string): Promise<LabRun[]> {
         .orderBy(asc(auditEvents.sequence));
       return rows.map(({ run, intent, order }) => ({
         id: run.id,
+        demoPacing: run.demoPacing,
+        submissionNotBefore: run.submissionNotBefore?.toISOString() ?? null,
         recoveredByLookup: events.some(
           (e) => e.intentId === intent.id && e.type === "reconciled",
         ),

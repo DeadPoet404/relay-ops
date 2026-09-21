@@ -29,6 +29,13 @@
       "when": 1789966441022,
       "tag": "0003_connected_storefront",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1790001542862,
+      "tag": "0004_live_journey_pacing",
+      "breakpoints": true
     }
   ]
 }

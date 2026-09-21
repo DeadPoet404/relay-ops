@@ -28,7 +28,7 @@ export interface LineItem {
   color: string;
 }
 export const checkoutSchema = z
-  .object({ requestId: z.uuid(), scenario: scenarioSchema, items: cartSchema })
+  .object({ requestId: z.uuid(), scenario: scenarioSchema, items: cartSchema, paced: z.boolean().optional() })
   .strict();
 export type CheckoutRequest = z.infer<typeof checkoutSchema>;
 export function priceCart(input: unknown) {

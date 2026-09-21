@@ -2,7 +2,7 @@
 import { useEffect, useState, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowRight, Check, ChevronDown, RotateCcw } from "lucide-react";
+import { ArrowRight, Check, ChevronDown, RotateCcw, Clock, Activity } from "lucide-react";
 import type { Scenario } from "@/lab/contracts";
 import { journeyScenarios, runPath } from "@/demo/journey";
 import { beginJourney, pendingCheckout, recentOrder } from "@/demo/browser";
@@ -78,8 +78,7 @@ export function GuidedStart({ enabled }: { enabled: boolean }) {
       <h1>What happens after checkout?</h1>
       <p className="journey-intro">
         Choose a problem to demonstrate. Then shop as the customer.
-        <br />
-        Relay will show you what happened to that same order.
+        <br />A persistent live tracker will follow that exact order — with real pacing (6s queue + 2s handoff) and short, truthful status.
       </p>
       {!enabled && (
         <div className="journey-notice">
@@ -125,9 +124,8 @@ export function GuidedStart({ enabled }: { enabled: boolean }) {
         <div>
           <span className="journey-eyebrow">WHAT TO LOOK FOR</span>
           <p>{choice.expected}</p>
-          <small>
-            This is the planned scenario. The result page reports actual saved
-            evidence.
+          <small style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 8 }}>
+            <Clock size={12} /> 6s queue + <Activity size={12} /> 2s handoff after durable claim · <span>Live widget persists across pages</span>
           </small>
         </div>
         <button
@@ -142,7 +140,7 @@ export function GuidedStart({ enabled }: { enabled: boolean }) {
       <p className="journey-start-tip">
         On the next page: choose a product → add it to your bag → demo checkout.
         You won’t enter card or personal details. Starting here does not place
-        an order or clear your bag.
+        an order or clear your bag. After checkout, watch the live journey widget — it stays visible on store, order, and evidence pages.
       </p>
       {last && (
         <Link href={runPath(last)} className="journey-recent">
@@ -164,7 +162,7 @@ export function GuidedStart({ enabled }: { enabled: boolean }) {
         </div>
         <p>
           Local execution settings are not a health check. If an order waits,
-          check those terminals. No database reset is required.
+          check those terminals. Pacing is intentional — 6s + 2s. No database reset is required.
         </p>
       </details>
     </div>

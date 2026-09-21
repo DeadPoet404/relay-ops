@@ -1,3 +1,5 @@
+import { setTimeout as delay } from "node:timers/promises";
+import { DEMO_HANDOFF_DELAY_MS } from "../demo/pacing";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 import type { PgBoss } from "pg-boss";
@@ -106,6 +108,8 @@ export async function processRun(
           return null;
         }
       } else if (row.run.status !== "queued" || history.length) return null;
+      if (!retryActionId && row.run.submissionNotBefore && row.run.submissionNotBefore.getTime() > Date.now())
+        throw new Error("Initial submission is not due yet");
       if (history.length >= MAX_SUBMISSIONS) {
         await requireReview(tx, row, "Submission retry budget exhausted.");
         return null;
@@ -134,6 +138,7 @@ export async function processRun(
         .returning();
       return {
         claimId: claim.id,
+        pacedFirstHandoff: row.run.demoPacing && history.length === 0,
         request: {
           reference: row.intent.externalReference,
           amountMinor: row.order.totalMinor,
@@ -144,6 +149,9 @@ export async function processRun(
     });
     if (!request) return;
     await hooks?.afterClaim?.();
+    // The claim and per-run lock already exist. A crash here is still an
+    // interrupted/unknown attempt: recovery must look up, never replay this POST.
+    if (request.pacedFirstHandoff) await delay(DEMO_HANDOFF_DELAY_MS);
     let result: ConnectorResult;
     try {
       result = await submit(request.request);

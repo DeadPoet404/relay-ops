@@ -1,0 +1,3 @@
+ALTER TABLE "lab_runs" ADD COLUMN "demo_pacing" boolean DEFAULT false NOT NULL;--> statement-breakpoint
+ALTER TABLE "lab_runs" ADD COLUMN "submission_not_before" timestamp with time zone;--> statement-breakpoint
+ALTER TABLE "lab_runs" ADD CONSTRAINT "demo_pacing_consistent" CHECK (("lab_runs"."demo_pacing" = false AND "lab_runs"."submission_not_before" IS NULL) OR ("lab_runs"."demo_pacing" = true AND "lab_runs"."submission_not_before" IS NOT NULL));

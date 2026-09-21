@@ -1,3 +1,5 @@
+import { z } from "zod";
+import { DEMO_QUEUE_DELAY_MS } from "../demo/pacing";
 import { eq, sql } from "drizzle-orm";
 import { fromDrizzle, type PgBoss } from "pg-boss";
 import { createRunSchema } from "./contracts";
@@ -22,8 +24,11 @@ export async function createRun(
   boss: PgBoss,
   input: unknown,
   cart?: Cart,
+  paced = false,
 ) {
   const request = createRunSchema.parse(input);
+  z.boolean().parse(paced);
+  if(paced && cart === undefined) throw new Error("Pacing requires a storefront purchase");
   const purchase = cart === undefined ? null : priceCart(cart);
   return db.transaction(async (tx) => {
     // Serialize the tiny local lab to make repeat-request checks and a bounded
@@ -40,6 +45,7 @@ export async function createRun(
         .where(eq(storefrontPurchases.runId, existing.id));
       if (
         existing.scenario !== request.scenario ||
+        existing.demoPacing !== paced ||
         (priorPurchase?.cartFingerprint ?? null) !==
           (purchase?.fingerprint ?? null)
       )
@@ -62,6 +68,7 @@ export async function createRun(
         "This local lab is capped at 100 runs. Preserve the evidence; do not reset the database blindly.",
       );
     const now = new Date();
+    const submissionNotBefore = paced ? new Date(now.getTime() + DEMO_QUEUE_DELAY_MS) : null;
     const [order] = await tx
       .insert(orders)
       .values({
@@ -92,6 +99,8 @@ export async function createRun(
       storeId: store.id,
       intentId: intent.id,
       scenario: request.scenario,
+      demoPacing: paced,
+      submissionNotBefore,
       createdAt: now,
     });
     if (purchase)
@@ -116,10 +125,16 @@ export async function createRun(
       tone: "neutral",
       occurredAt: now,
     });
+    if (paced) await tx.insert(auditEvents).values({
+      intentId: intent.id, sequence: 2, type: "demo_pacing_enabled", actor: "local_demo",
+      title: "Presentation pacing enabled",
+      description: `Local demo pacing: initial submission not before ${submissionNotBefore!.toISOString()}; first handoff pauses for two seconds after its durable claim. Recovery policy and budgets are unchanged.`,
+      tone: "neutral", occurredAt: now,
+    });
     const jobId = await boss.send(
       SUBMISSION_QUEUE,
       { runId: request.requestId },
-      { id: request.requestId, db: fromDrizzle(tx, sql) },
+      { id: request.requestId, ...(submissionNotBefore ? { startAfter: submissionNotBefore } : {}), db: fromDrizzle(tx, sql) },
     );
     if (!jobId) throw new Error("Queue insert did not return a job ID");
     return { runId: request.requestId, duplicate: false };

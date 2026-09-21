@@ -24,6 +24,8 @@ export const createRunSchema = z
 export type Scenario = z.infer<typeof scenarioSchema>;
 export type RunState = (typeof runStates)[number];
 export interface LabRun {
+  demoPacing?: boolean;
+  submissionNotBefore?: string | null;
   recoveredByLookup?: boolean;
   id: string;
   orderNumber: string;

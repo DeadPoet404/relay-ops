@@ -1,0 +1,287 @@
+.live-journey {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  z-index: 60;
+  width: 360px;
+  max-width: calc(100vw - 24px);
+  background: #fffffffa;
+  backdrop-filter: blur(14px);
+  border: 1px solid #e6e7ee;
+  border-radius: 16px;
+  box-shadow: 0 18px 60px #1f23400f, 0 2px 10px #1f23400a;
+  font-family: Arial, Helvetica, sans-serif;
+  overflow: hidden;
+  transition: transform 0.22s ease, opacity 0.22s ease;
+  pointer-events: none;
+}
+.live-journey * {
+  pointer-events: none;
+}
+.live-journey-toggle,
+.live-journey-footer a,
+.live-journey-note button {
+  pointer-events: auto;
+}
+.live-journey.collapsed {
+  width: 320px;
+}
+.live-journey-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 14px 12px 16px;
+  border-bottom: 1px solid #eef0f4;
+  background: linear-gradient(180deg, #fff, #fbfbfe);
+}
+.live-journey-title {
+  flex: 1;
+  min-width: 0;
+}
+.live-journey-title strong {
+  display: block;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: -0.2px;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.live-journey-title span {
+  display: block;
+  font-size: 10px;
+  color: #7b8190;
+  margin-top: 3px;
+  letter-spacing: 0.2px;
+}
+.live-journey-pill {
+  font-size: 9px;
+  letter-spacing: 0.8px;
+  font-weight: 700;
+  padding: 4px 8px;
+  border-radius: 20px;
+  border: 1px solid transparent;
+  text-transform: uppercase;
+}
+.live-journey-pill.running {
+  background: #f0efff;
+  color: #5a52d6;
+  border-color: #d9d6f3;
+}
+.live-journey-pill.done {
+  background: #eef6ed;
+  color: #4a6d3f;
+  border-color: #d6e6d2;
+}
+.live-journey-pill.review {
+  background: #fff4e6;
+  color: #8a5a1f;
+  border-color: #f1d7a8;
+}
+.live-journey-pill.pending {
+  background: #f6f7f9;
+  color: #7a8190;
+  border-color: #e6e8ee;
+}
+.live-journey-toggle {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border: 1px solid #e6e8ee;
+  background: white;
+  border-radius: 8px;
+  color: #6b7282;
+}
+.live-journey-toggle:hover { background: #f8f8fb; }
+
+.live-journey-progress {
+  height: 3px;
+  background: #f0f1f5;
+  position: relative;
+  overflow: hidden;
+}
+.live-journey-progress i {
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  background: linear-gradient(90deg, #6d65e0, #a59cf0);
+  transition: width 0.6s cubic-bezier(.2,.8,.2,1);
+  border-radius: 0 3px 3px 0;
+}
+.live-journey-progress i::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, #ffffff66, transparent);
+  animation: live-shimmer 1.6s infinite;
+}
+@keyframes live-shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(200%); }
+}
+
+.live-journey-body {
+  padding: 14px 14px 10px 16px;
+}
+.live-journey-stages {
+  display: grid;
+  gap: 0;
+  position: relative;
+}
+.live-journey-stage {
+  display: grid;
+  grid-template-columns: 28px 1fr;
+  gap: 10px;
+  padding: 10px 0 12px;
+  position: relative;
+}
+.live-journey-stage + .live-journey-stage::before {
+  content: "";
+  position: absolute;
+  left: 13px;
+  top: -2px;
+  width: 2px;
+  height: 14px;
+  background: #eceef3;
+}
+.live-journey-stage.done + .live-journey-stage::before {
+  background: #c8c4e9;
+}
+.live-journey-stage.active + .live-journey-stage::before {
+  background: linear-gradient(180deg, #a59cf0, #eceef3);
+}
+.live-journey-dot {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  border: 2px solid #e5e7ef;
+  background: white;
+  position: relative;
+  flex-shrink: 0;
+}
+.live-journey-dot.done {
+  background: #5750d5;
+  border-color: #5750d5;
+  color: white;
+}
+.live-journey-dot.active {
+  border-color: #8e87e8;
+  background: #f6f4ff;
+  color: #5a52d6;
+}
+.live-journey-dot.error {
+  background: #fff4e6;
+  border-color: #e5b86a;
+  color: #8a5a1f;
+}
+.live-journey-dot.pending {
+  background: #fbfbfc;
+  border-color: #e6e8ee;
+  color: #aab0be;
+}
+.live-journey-dot.active::after {
+  content: "";
+  position: absolute;
+  inset: -6px;
+  border-radius: 50%;
+  border: 1px solid #a59cf055;
+  animation: live-ping 1.6s cubic-bezier(0,0,.2,1) infinite;
+}
+@keyframes live-ping {
+  0% { transform: scale(0.8); opacity: 1; }
+  100% { transform: scale(1.4); opacity: 0; }
+}
+.live-journey-stage-content {
+  min-width: 0;
+}
+.live-journey-stage-content strong {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+.live-journey-stage-content small {
+  display: block;
+  font-size: 11px;
+  line-height: 1.55;
+  color: #6d7586;
+  margin-top: 4px;
+}
+.live-journey-stage-content time {
+  font-size: 9px;
+  color: #9aa0af;
+  margin-left: auto;
+  font-weight: 500;
+}
+.live-journey-footer {
+  display: flex;
+  gap: 8px;
+  padding: 12px 14px 14px 16px;
+  border-top: 1px solid #eef0f4;
+  background: #fbfbfe;
+}
+.live-journey-footer a {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 10px 12px;
+  border-radius: 9px;
+  border: 1px solid transparent;
+  text-decoration: none;
+  transition: all .15s;
+}
+.live-journey-footer a.primary {
+  background: #2d2a5a;
+  color: white;
+}
+.live-journey-footer a.primary:hover { background: #1e1c3f; }
+.live-journey-footer a.secondary {
+  background: white;
+  border-color: #e6e8ee;
+  color: #4a5060;
+}
+.live-journey-footer a.secondary:hover { background: #f6f6fb; }
+
+.live-journey-mini {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px 12px 16px;
+}
+.live-journey-mini .live-journey-dot { width: 22px; height: 22px; }
+.live-journey-mini strong { font-size: 11px; }
+.live-journey-mini span { font-size: 10px; color: #6d7586; display: block; margin-top: 2px; }
+
+.live-journey-note {
+  font-size: 9px;
+  color: #9aa0af;
+  padding: 8px 16px 12px;
+  line-height: 1.5;
+}
+
+@media (max-width: 640px) {
+  .live-journey {
+    left: 10px;
+    right: 10px;
+    bottom: 10px;
+    width: auto;
+    max-width: none;
+    border-radius: 14px;
+  }
+  .live-journey.collapsed { width: auto; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .live-journey, .live-journey-progress i, .live-journey-dot::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}

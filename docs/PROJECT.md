@@ -1,6 +1,6 @@
 # Relay — project brief
 
-> **Current implementation: increment 006.** A fictional Northline storefront now feeds real persisted demo purchases into Relay’s existing worker and recovery system. This is a portfolio demonstration of integration engineering, not a production commerce platform or an enterprise OMS replacement. A guided flow now connects the purchase directly to its evidence-based result. See [GUIDED-DEMO.md](GUIDED-DEMO.md).
+> **Current implementation: increment 007.** A fictional Northline storefront now feeds real persisted demo purchases into Relay’s existing worker and recovery system. This is a portfolio demonstration of integration engineering, not a production commerce platform or an enterprise OMS replacement. A persistent live journey widget now follows the exact order across all pages with animated stages, short real-time copy, and real presentation pacing (6s queue + 2s handoff). See [GUIDED-DEMO.md](GUIDED-DEMO.md).
 
 ## Product and audience
 
@@ -106,7 +106,13 @@ A polished fictional everyday-carry storefront, catalog-priced cart, no-charge c
 
 Production authentication, Shopify ingestion, and live-payment integration are deferred rather than prerequisites for a convincing local portfolio demonstration.
 
-### 006 — Guided demonstration and evidence (shipped)
+### 006 — Guided demonstration
+
+A single entry point, exact evidence reads, and safe browser continuity. The storefront confirmation now links directly to its result without searching.
+
+### 007 — Live order journey
+
+A persistent animated widget shows the same order's progress on every page (store, checkout, order status, evidence, console). Stages are derived from real saved state, not a predetermined success animation. Presentation pacing adds a real 6s queue delay via pg-boss startAfter and a 2s pause after the durable claim before the first HTTP call. Short, truthful copy explains what is happening right now. Recovery budgets and policy remain unchanged. and evidence (shipped)
 
 A clear starting page, plain-language scenario selection, direct exact-order result links, evidence-derived summaries, expandable audit, pending-checkout preservation, and explicit working-versus-simulated boundaries. Browser and database checks verify the flow and old-run lookup. Includes a recording outline, not a claimed finished video or public deployment.
 

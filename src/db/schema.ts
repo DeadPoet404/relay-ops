@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import {
+  boolean,
   check,
   index,
   integer,
@@ -162,6 +163,8 @@ export const labRuns = pgTable(
       .unique()
       .references(() => fulfillmentIntents.id),
     scenario: labScenario("scenario").notNull(),
+    demoPacing: boolean("demo_pacing").notNull().default(false),
+    submissionNotBefore: time("submission_not_before"),
     status: labRunState("status").notNull().default("queued"),
     createdAt: time("created_at").notNull(),
     completedAt: time("completed_at"),
@@ -172,6 +175,7 @@ export const labRuns = pgTable(
     reviewReason: text("review_reason"),
   },
   (table) => [
+    check("demo_pacing_consistent", sql`(${table.demoPacing} = false AND ${table.submissionNotBefore} IS NULL) OR (${table.demoPacing} = true AND ${table.submissionNotBefore} IS NOT NULL)`),
     check(
       "pending_recovery_consistent",
       sql`(${table.pendingAction} IS NULL AND ${table.pendingActionId} IS NULL AND ${table.nextActionAt} IS NULL) OR (${table.pendingAction} IS NOT NULL AND ${table.pendingAction} IN ('retry','lookup') AND ${table.pendingActionId} IS NOT NULL AND ${table.nextActionAt} IS NOT NULL)`,

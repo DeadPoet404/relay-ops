@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import type { LabRun } from "@/lab/contracts";
 import { summarizeRun } from "@/demo/journey";
+import { deriveLiveJourney } from "@/demo/live-stages";
 export function RunEvidence({ id, enabled }: { id: string; enabled: boolean }) {
   const [run, setRun] = useState<LabRun | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -126,12 +127,35 @@ export function RunEvidence({ id, enabled }: { id: string; enabled: boolean }) {
         <>
           <div className="journey-order-strip">
             <strong>{run.orderNumber}</strong>
-            <span>Persisted demo order</span>
+            <span>Persisted demo order{run.demoPacing ? " · pacing enabled" : ""}</span>
             <small>
               {read ? `Last checked ${read}` : ""}
               {error ? " · may be stale" : ""}
+              {run.demoPacing ? " · 6s queue + 2s handoff" : ""}
             </small>
           </div>
+          {(() => {
+            const j = deriveLiveJourney(run);
+            return (
+              <div style={{ margin: "14px 0 18px", padding: "12px 14px", background: "#f6f5fb", border: "1px solid #e6e2f5", borderRadius: 12 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <strong style={{ fontSize: 10, letterSpacing: 1, color: "#7a7694" }}>LIVE JOURNEY · {j.progress}% · {j.finalLabel}</strong>
+                  <span style={{ fontSize: 9, color: "#9aa0af" }}>{j.isPaced ? "Real pacing" : "Standard"}</span>
+                </div>
+                <div style={{ height: 3, background: "#eceaf5", borderRadius: 3, margin: "8px 0", overflow: "hidden" }}>
+                  <div style={{ width: `${j.progress}%`, height: "100%", background: j.needsReview ? "linear-gradient(90deg,#d6a24a,#e8c27a)" : "linear-gradient(90deg,#6d65e0,#a59cf0)", transition: "width .6s ease" }} />
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0,1fr))", gap: 8 }}>
+                  {j.stages.map(st => (
+                    <div key={st.key} style={{ fontSize: 10, lineHeight: 1.5 }}>
+                      <div style={{ fontWeight: 700, color: st.state === "done" ? "#4a4a6a" : st.state === "active" ? "#5a52d6" : "#9aa0af" }}>{st.title}</div>
+                      <div style={{ color: "#6d7586", marginTop: 2 }}>{st.detail}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
           <section
             className={`journey-result journey-result-${summary!.tone}`}
             aria-label="Order result summary"

@@ -1,6 +1,6 @@
-# Increment 005 — a connected Northline storefront
+# Increment 007 — persistent live journey (storefront remains 005, now paced)
 
-> Checkout architecture remains current. Increment 006 adds the simpler `/demo` entry and direct order evidence links. Current counts are 65 unit / 54 integration tests; see [GUIDED-DEMO.md](GUIDED-DEMO.md).
+> Checkout architecture remains 005, now with real pacing (6s queue + 2s handoff) and persistent live widget. Increment 006 added `/demo` entry and exact evidence links, 007 adds live journey. Current counts 65 unit / 54 integration; see [GUIDED-DEMO.md](GUIDED-DEMO.md).
 
 ## What this demonstrates
 

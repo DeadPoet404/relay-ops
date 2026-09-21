@@ -19,7 +19,7 @@ export async function POST(request: Request) {
       { status: 403, headers },
     );
   try {
-    const { items, ...run } = checkoutSchema.parse(
+    const { items, paced, ...run } = checkoutSchema.parse(
       await readSmallJson(request),
     );
     const result = await createRun(
@@ -27,6 +27,7 @@ export async function POST(request: Request) {
       await getLabBoss(),
       run,
       items,
+      paced ?? false,
     );
     return Response.json(result, {
       status: result.duplicate ? 200 : 201,

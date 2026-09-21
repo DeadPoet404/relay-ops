@@ -4,7 +4,7 @@
 
 Relay explores the systems between payment and fulfillment: **which orders are stuck, what evidence do we have, and what is safe to do next?**
 
-**Current increment: 006 — guided order-recovery demonstration.** The console, PostgreSQL persistence, durable queue, background worker, and HTTP warehouse simulator work together. All customers, paid orders, and warehouse records remain fictional. There is no Shopify integration, real shipment creation, production authentication, address correction, or permission to force a submission. Bounded retries and reference lookups operate only against the local simulator.
+**Current increment: 007 — persistent live order journey with real pacing.** The console, PostgreSQL persistence, durable queue, background worker, and HTTP warehouse simulator work together. All customers, paid orders, and warehouse records remain fictional. There is no Shopify integration, real shipment creation, production authentication, address correction, or permission to force a submission. Bounded retries and reference lookups operate only against the local simulator.
 
 ## Local setup
 
@@ -45,9 +45,9 @@ Open **http://localhost:3000**, then Demo lab. Use that exact origin unless you 
 
 ## A purchase you can follow
 
-Start at **http://localhost:3000/demo**. Click **Try the demo**, choose **The warehouse reply goes missing**, then **Shop this demo**. Northline has product details, a persistent bag, no-charge checkout, and an order-status page.
+Start at **http://localhost:3000/demo**. Choose a problem, shop Northline, and watch the persistent live journey widget follow that exact order across every page with real 6s queue + 2s handoff pacing and short, truthful status. Northline has product details, a persistent bag, no-charge checkout, and an order-status page.
 
-After purchase, click **See how Relay handled this order**. It opens that exact order's persisted result and audit trail—no copying an order number or searching the latest-ten list. The summary reports saved evidence rather than assuming the selected scenario succeeded.
+After purchase, the live journey widget persists across store, order, and evidence pages, showing Order recorded → Submission → Checking → Confirmed with animated stages and short real-time copy. Click **See how Relay handled this order** for the full audit trail — same UUID everywhere. The summary reports saved evidence rather than assuming the selected scenario succeeded.
 
 Shop → demo checkout → durable order/job → simulated warehouse → Relay recovery. Payment/customer details are fictional, nothing ships, and warehouse acknowledgement is not delivery.
 
