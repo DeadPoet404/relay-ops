@@ -3,6 +3,7 @@ import {
   check,
   index,
   integer,
+  jsonb,
   pgEnum,
   pgTable,
   text,
@@ -233,5 +234,23 @@ export const simulatorRequests = pgTable(
   },
   (table) => [
     check("simulator_count_nonnegative", sql`${table.submissionCount} >= 0`),
+  ],
+);
+
+// Immutable purchase snapshot for storefront-originated synthetic orders.
+export const storefrontPurchases = pgTable(
+  "storefront_purchases",
+  {
+    runId: uuid("run_id")
+      .primaryKey()
+      .references(() => labRuns.id),
+    cartFingerprint: text("cart_fingerprint").notNull(),
+    items: jsonb("items").$type<import("../store/cart").LineItem[]>().notNull(),
+  },
+  (table) => [
+    check(
+      "storefront_items_array",
+      sql`jsonb_typeof(${table.items}) = 'array' AND jsonb_array_length(${table.items}) BETWEEN 1 AND 4`,
+    ),
   ],
 );

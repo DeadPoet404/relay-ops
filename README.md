@@ -4,7 +4,7 @@
 
 Relay explores the systems between payment and fulfillment: **which orders are stuck, what evidence do we have, and what is safe to do next?**
 
-**Current increment: 004 — safe recovery and reconciliation.** The console, PostgreSQL persistence, durable queue, background worker, and HTTP warehouse simulator work together. All customers, paid orders, and warehouse records remain fictional. There is no Shopify integration, real shipment creation, production authentication, address correction, or permission to force a submission. Bounded retries and reference lookups operate only against the local simulator.
+**Current increment: 005 — connected Northline storefront.** The console, PostgreSQL persistence, durable queue, background worker, and HTTP warehouse simulator work together. All customers, paid orders, and warehouse records remain fictional. There is no Shopify integration, real shipment creation, production authentication, address correction, or permission to force a submission. Bounded retries and reference lookups operate only against the local simulator.
 
 ## Local setup
 
@@ -42,6 +42,14 @@ npm run demo:dev
 ```
 
 Open **http://localhost:3000**, then Demo lab. Use that exact origin unless you deliberately change `RELAY_DEMO_ORIGIN`. Both `dev` and `demo:dev` bind to loopback by default. Do not expose an enabled local lab through a public proxy.
+
+## A purchase you can follow
+
+Open **http://localhost:3000/presenter**, choose **Accepted, response lost**, then visit **/store**. Northline Supply is a polished fictional everyday-carry store: product details, category filters, a persistent bag, no-charge checkout, and a persisted order-status page.
+
+Shop → demo checkout → durable order/job → simulated warehouse → Relay recovery. Open Relay's Demo lab and match the `NL-...` order number to see the same purchase recover by reference lookup, not resubmission. Payment/customer details are fictional and nothing ships. The status page confirms warehouse acknowledgement, not delivery.
+
+Production/fixture previews allow browsing but disable purchases and order-record reads. Keep enabled execution local. See [the storefront guide](docs/STOREFRONT.md) for the connected walkthrough, API boundaries, and an optional reproducible Playwright check.
 
 ## What to demonstrate
 
@@ -91,8 +99,8 @@ npm run test:db
 npm run build
 ```
 
-- **38 unit tests**: fixtures, filtering, display, domain policy, configuration, origin guards, and bounded request parsing.
-- **39 database/integration tests**: persistence, transactional rollback, duplicate/concurrent requests, all simulator outcomes, queue redelivery, bounded retries/lookups, stale delivery fencing, atomic recovery scheduling, and real worker stop/restart/SIGKILL cases.
+- **49 unit tests**: fixtures, filtering, display, domain policy, configuration, origin guards, and bounded request parsing.
+- **49 database/integration tests**: persistence, transactional rollback, duplicate/concurrent requests, all simulator outcomes, queue redelivery, bounded retries/lookups, stale delivery fencing, atomic recovery scheduling, and real worker stop/restart/SIGKILL cases.
 - GitHub Actions is configured to run the same core checks with PostgreSQL. Check the actual Actions result after pushing; configuration is not proof a remote run succeeded.
 
 **The integration suite truncates application/simulator tables and deletes queue jobs in its dedicated test database.** `TEST_DATABASE_URL` must point to a disposable loopback database whose name ends in `_test`, different from the application's database. Never use a database containing valuable data. Do not run multiple test suites against the same test database concurrently.
@@ -107,7 +115,7 @@ If it exists, don't drop it. Dependency deprecation warnings in the pinned toolc
 
 ## Architecture and stack
 
-Next.js App Router, TypeScript, Tailwind CSS 4, Radix Dialog, Lucide, PostgreSQL 17, Drizzle, node-postgres, Zod, **pg-boss**, Vitest, and tsx. Versions are locked in `package-lock.json`. System fonts avoid a runtime CDN dependency.
+Next.js App Router, TypeScript, Tailwind CSS 4, Radix Dialog, Lucide, PostgreSQL 17, Drizzle, node-postgres, Zod, **pg-boss**, Vitest, Playwright, and tsx. Versions are locked in `package-lock.json`. System fonts avoid a runtime CDN dependency.
 
 ```text
 src/app/          Server page, read API, guarded local-demo API
@@ -115,6 +123,7 @@ src/components/   Exception console and executable Demo lab
 src/domain/       Pure, validated fulfillment state transitions
 src/db/           Schema, migrations adapter, seed, reads, atomic state/audit writes
 src/lab/          Local execution contracts, request policy, run creation/projection
+src/store/        Catalog, strict cart pricing, purchase/status projection
 src/queue/        pg-boss configuration and initialization
 src/worker/       Durable claim and submission processing
 src/recovery/     Bounded policy, transactional scheduling, lookup and scan handlers
@@ -152,7 +161,7 @@ npm run db:up
 
 Use `db:generate` only when developing a new application schema migration. Review and commit generated SQL; don't edit previously applied migrations or replace tracked migration history with `drizzle-kit push`.
 
-Read [the execution guide](docs/EXECUTION.md), [the earlier persistence design](docs/PERSISTENCE.md), [the product brief](docs/PROJECT.md), and [the sequential patch workflow](docs/PATCH-WORKFLOW.md).
+Read [the storefront guide](docs/STOREFRONT.md), [the execution guide](docs/EXECUTION.md), [the earlier persistence design](docs/PERSISTENCE.md), [the product brief](docs/PROJECT.md), and [the sequential patch workflow](docs/PATCH-WORKFLOW.md).
 
 ## License
 

@@ -35,7 +35,7 @@ beforeAll(async () => {
 });
 beforeEach(async () => {
   await db.execute(
-    sql`TRUNCATE TABLE simulator_requests, submission_attempts, lab_runs, simulator_receipts, audit_events, exceptions, fulfillment_intents, orders, stores`,
+    sql`TRUNCATE TABLE storefront_purchases, simulator_requests, submission_attempts, lab_runs, simulator_receipts, audit_events, exceptions, fulfillment_intents, orders, stores`,
   );
   await seedDemo(db);
 });

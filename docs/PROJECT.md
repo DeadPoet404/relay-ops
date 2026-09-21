@@ -1,6 +1,6 @@
 # Relay — project brief
 
-> **Current implementation: increment 004.** The local simulator now supports bounded retries, reference-only reconciliation, durable scheduling, and escalation to human review. See [EXECUTION.md](EXECUTION.md) for the shipped boundary. Real Shopify ingestion, production access control, and address correction remain deferred.
+> **Current implementation: increment 005.** A fictional Northline storefront now feeds real persisted demo purchases into Relay’s existing worker and recovery system. This is a portfolio demonstration of integration engineering, not a production commerce platform or an enterprise OMS replacement. See [STOREFRONT.md](STOREFRONT.md).
 
 ## Product and audience
 
@@ -12,7 +12,7 @@ The flagship demonstration follows one order through an integration failure, inv
 
 ## Initial boundary
 
-One Shopify development store, one configurable fulfillment connector, and a fictional reference merchant named Northline Supply. Initially use an explicitly simulated warehouse. Model payment and fulfillment separately: a paid order is not necessarily eligible for fulfillment. Eligibility rules must consider cancellations, payment changes, holds, line-item requirements, and existing fulfillment records.
+Revised demonstration scope: a fictional Northline Supply storefront and an explicitly simulated warehouse, connected through real local persistence and worker processing. Shopify development-store integration is deferred; no Shopify account is needed to present the current project. Model payment and fulfillment separately: a paid order is not necessarily eligible for fulfillment. Eligibility rules must consider cancellations, payment changes, holds, line-item requirements, and existing fulfillment records.
 
 Three core scenarios:
 
@@ -100,9 +100,11 @@ A real simulated warehouse endpoint, durable worker jobs, and controlled failure
 
 Shipped for the local simulator: bounded retries, reference lookup, scheduled reconciliation, stale-delivery fencing, concurrent processing protection, and a guarded read-only operator check. Tests exercise accepted-but-timed-out requests, failed lookups, exhausted budgets, duplicate/stale deliveries, atomic scheduling, worker crashes and restart. Browser checks cover six scenarios and mobile layout. Production-authorized human actions, webhook ordering, missed-webhook recovery, and address correction are not implemented in this increment.
 
-### 005 — Shopify and deployment hardening
+### 005 — Connected storefront (revised scope)
 
-Development-store integration, raw-body HMAC webhook verification, permissions/authentication, secure credential management, request validation, structured redacted logs, basic monitoring, deployment of web and worker processes, migration strategy, backups, and recovery documentation. Verify actual Shopify API constraints when implementing; do not assume any arbitrary paid order can be fulfilled by this connector.
+A polished fictional everyday-carry storefront, catalog-priced cart, no-charge checkout, durable purchase snapshot, and customer-facing acknowledgement. Separate presenter controls select controlled warehouse failures. Link the same order to Relay's audit and recovery counts. Demonstrate safe retry of a lost checkout response and all six fulfillment paths.
+
+Production authentication, Shopify ingestion, and live-payment integration are deferred rather than prerequisites for a convincing local portfolio demonstration.
 
 ### 006 — Public evidence
 

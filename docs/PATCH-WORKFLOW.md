@@ -93,3 +93,18 @@ Keep existing environment files, database volume, seed records, receipts, and au
 Restart all three processes using the execution guide. Existing unresolved lab runs are eligible for read-only lookup on worker startup; historical unavailable runs are **not** retroactively authorized for submission retry. Rows already escalated by this increment remain in review. Seed-only examples are not recovery jobs.
 
 Verify lint, type checking, 38 unit tests, 39 disposable-database integration tests, and production build. Apply the test-database warnings above; never run the integration suite against preserved application data. Push normally and inspect the actual GitHub Actions result.
+
+## Increment 005
+
+Apply `005-relay-storefront.patch` over published increment 004 (`6babd90`). Stop the web app, simulator, and worker, keep PostgreSQL running, then:
+
+```bash
+git am "$HOME/Downloads/005-relay-storefront.patch"
+npm ci
+npm run db:migrate
+npm run queue:init
+```
+
+This patch contains Git binary patches for locally served, AI-generated WebP imagery. Use `git am`, not copy/paste or `git apply`. Migration `0003_connected_storefront.sql` adds a purchase snapshot table without rewriting old data. No reseed or database reset is required.
+
+Restart the local services, open `/presenter`, then `/store`. Existing console functionality remains at `/`. Follow [STOREFRONT.md](STOREFRONT.md). Verify 49 unit tests, 49 integration tests, lint, types, and production build before pushing. The optional browser check creates six persisted demo purchases; it does not clear the app database.

@@ -173,8 +173,12 @@ export function RelayConsole({ data: initialData }: { data: ConsoleData }) {
         >
           <FlaskConical size={18} strokeWidth={1.7} />
           <span>Demo lab</span>
-          <span className="tiny-label">04</span>
+          <span className="tiny-label">05</span>
         </button>
+        <a href="/store" className="nav-item">
+          <ExternalLink size={18} strokeWidth={1.7} />
+          <span>Northline storefront</span>
+        </a>
         <div className="sidebar-bottom">
           <div className="build-note">
             <span className="build-note-icon">
@@ -281,7 +285,7 @@ export function RelayConsole({ data: initialData }: { data: ConsoleData }) {
               </strong>{" "}
               Synthetic data only. No live customer orders.
             </span>
-            <span className="banner-version">RECOVERY / 004</span>
+            <span className="banner-version">STOREFRONT / 005</span>
           </div>
           {view === "exceptions" && (
             <>
@@ -721,7 +725,7 @@ export function RelayConsole({ data: initialData }: { data: ConsoleData }) {
             <span className="about-mark">
               <ShieldCheck size={25} />
             </span>
-            <div className="eyebrow">RELAY · INCREMENT 004</div>
+            <div className="eyebrow">RELAY · INCREMENT 005</div>
             <Dialog.Title>
               A little clarity between
               <br />

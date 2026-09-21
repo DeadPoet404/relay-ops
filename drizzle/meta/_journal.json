@@ -22,6 +22,13 @@
       "when": 1789963549344,
       "tag": "0002_safe_recovery",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1789966441022,
+      "tag": "0003_connected_storefront",
+      "breakpoints": true
     }
   ]
 }

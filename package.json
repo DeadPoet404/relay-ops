@@ -22,7 +22,8 @@
     "simulator": "tsx scripts/simulator.ts",
     "worker": "tsx scripts/worker.ts",
     "demo:configure": "tsx scripts/demo-configure.ts",
-    "demo:dev": "next dev --hostname 127.0.0.1 --port 3000"
+    "demo:dev": "next dev --hostname 127.0.0.1 --port 3000",
+    "test:storefront:browser": "node scripts/check-storefront.mjs"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.15",
@@ -37,6 +38,7 @@
     "zod": "^4.6.5"
   },
   "devDependencies": {
+    "@playwright/test": "1.63.0",
     "@tailwindcss/postcss": "4.3.3",
     "@types/node": "^22.0.0",
     "@types/pg": "^8.23.1",

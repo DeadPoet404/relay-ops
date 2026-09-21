@@ -60,7 +60,7 @@ beforeEach(async () => {
   for (const queue of [SUBMISSION_QUEUE, RECOVERY_QUEUE, SCAN_QUEUE])
     await boss.deleteAllJobs(queue);
   await db.execute(
-    sql`TRUNCATE TABLE simulator_requests, submission_attempts, lab_runs, simulator_receipts, audit_events, exceptions, fulfillment_intents, orders, stores`,
+    sql`TRUNCATE TABLE storefront_purchases, simulator_requests, submission_attempts, lab_runs, simulator_receipts, audit_events, exceptions, fulfillment_intents, orders, stores`,
   );
   await seedDemo(db);
 });

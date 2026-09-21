@@ -1,0 +1,999 @@
+{
+  "id": "78c43637-b0b4-488a-8088-6ba9d7476778",
+  "prevId": "ac288db1-61ab-401b-88a5-baa96e605048",
+  "version": "7",
+  "dialect": "postgresql",
+  "tables": {
+    "public.audit_events": {
+      "name": "audit_events",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "intent_id": {
+          "name": "intent_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "sequence": {
+          "name": "sequence",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "type": {
+          "name": "type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "actor": {
+          "name": "actor",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "title": {
+          "name": "title",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "tone": {
+          "name": "tone",
+          "type": "event_tone",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "occurred_at": {
+          "name": "occurred_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "audit_intent_time_idx": {
+          "name": "audit_intent_time_idx",
+          "columns": [
+            {
+              "expression": "intent_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "occurred_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "audit_events_intent_id_fulfillment_intents_id_fk": {
+          "name": "audit_events_intent_id_fulfillment_intents_id_fk",
+          "tableFrom": "audit_events",
+          "tableTo": "fulfillment_intents",
+          "columnsFrom": [
+            "intent_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "audit_intent_sequence_unique": {
+          "name": "audit_intent_sequence_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "intent_id",
+            "sequence"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "audit_sequence_positive": {
+          "name": "audit_sequence_positive",
+          "value": "\"audit_events\".\"sequence\" > 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.exceptions": {
+      "name": "exceptions",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "intent_id": {
+          "name": "intent_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "kind": {
+          "name": "kind",
+          "type": "failure_kind",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "exception_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "opened_at": {
+          "name": "opened_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "resolved_at": {
+          "name": "resolved_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "exceptions_status_opened_idx": {
+          "name": "exceptions_status_opened_idx",
+          "columns": [
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "opened_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "exceptions_intent_id_fulfillment_intents_id_fk": {
+          "name": "exceptions_intent_id_fulfillment_intents_id_fk",
+          "tableFrom": "exceptions",
+          "tableTo": "fulfillment_intents",
+          "columnsFrom": [
+            "intent_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "exceptions_intent_id_unique": {
+          "name": "exceptions_intent_id_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "intent_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "exception_resolution_consistent": {
+          "name": "exception_resolution_consistent",
+          "value": "(\"exceptions\".\"status\" = 'resolved' AND \"exceptions\".\"resolved_at\" IS NOT NULL AND \"exceptions\".\"resolved_at\" >= \"exceptions\".\"opened_at\") OR (\"exceptions\".\"status\" <> 'resolved' AND \"exceptions\".\"resolved_at\" IS NULL)"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.fulfillment_intents": {
+      "name": "fulfillment_intents",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "order_id": {
+          "name": "order_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "external_reference": {
+          "name": "external_reference",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "state": {
+          "name": "state",
+          "type": "fulfillment_state",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "warehouse_reference": {
+          "name": "warehouse_reference",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "version": {
+          "name": "version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "fulfillment_intents_order_id_orders_id_fk": {
+          "name": "fulfillment_intents_order_id_orders_id_fk",
+          "tableFrom": "fulfillment_intents",
+          "tableTo": "orders",
+          "columnsFrom": [
+            "order_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "fulfillment_intents_order_id_unique": {
+          "name": "fulfillment_intents_order_id_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "order_id"
+          ]
+        },
+        "fulfillment_intents_external_reference_unique": {
+          "name": "fulfillment_intents_external_reference_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "external_reference"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "intent_version_nonnegative": {
+          "name": "intent_version_nonnegative",
+          "value": "\"fulfillment_intents\".\"version\" >= 0"
+        },
+        "acknowledged_has_reference": {
+          "name": "acknowledged_has_reference",
+          "value": "\"fulfillment_intents\".\"state\" <> 'acknowledged' OR length(trim(\"fulfillment_intents\".\"warehouse_reference\")) > 0 AND \"fulfillment_intents\".\"warehouse_reference\" IS NOT NULL"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.lab_runs": {
+      "name": "lab_runs",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "store_id": {
+          "name": "store_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "intent_id": {
+          "name": "intent_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "scenario": {
+          "name": "scenario",
+          "type": "lab_scenario",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "lab_run_state",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'queued'"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "completed_at": {
+          "name": "completed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "pending_action": {
+          "name": "pending_action",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "pending_action_id": {
+          "name": "pending_action_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "next_action_at": {
+          "name": "next_action_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "lookup_count": {
+          "name": "lookup_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "review_reason": {
+          "name": "review_reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "lab_runs_store_created_idx": {
+          "name": "lab_runs_store_created_idx",
+          "columns": [
+            {
+              "expression": "store_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "lab_runs_store_id_stores_id_fk": {
+          "name": "lab_runs_store_id_stores_id_fk",
+          "tableFrom": "lab_runs",
+          "tableTo": "stores",
+          "columnsFrom": [
+            "store_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "lab_runs_intent_id_fulfillment_intents_id_fk": {
+          "name": "lab_runs_intent_id_fulfillment_intents_id_fk",
+          "tableFrom": "lab_runs",
+          "tableTo": "fulfillment_intents",
+          "columnsFrom": [
+            "intent_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "lab_runs_intent_id_unique": {
+          "name": "lab_runs_intent_id_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "intent_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "pending_recovery_consistent": {
+          "name": "pending_recovery_consistent",
+          "value": "(\"lab_runs\".\"pending_action\" IS NULL AND \"lab_runs\".\"pending_action_id\" IS NULL AND \"lab_runs\".\"next_action_at\" IS NULL) OR (\"lab_runs\".\"pending_action\" IS NOT NULL AND \"lab_runs\".\"pending_action\" IN ('retry','lookup') AND \"lab_runs\".\"pending_action_id\" IS NOT NULL AND \"lab_runs\".\"next_action_at\" IS NOT NULL)"
+        },
+        "lookup_budget_bound": {
+          "name": "lookup_budget_bound",
+          "value": "\"lab_runs\".\"lookup_count\" >= 0 AND \"lab_runs\".\"lookup_count\" <= 3"
+        },
+        "lab_completion_consistent": {
+          "name": "lab_completion_consistent",
+          "value": "(\"lab_runs\".\"status\" IN ('queued','running') AND \"lab_runs\".\"completed_at\" IS NULL) OR (\"lab_runs\".\"status\" NOT IN ('queued','running') AND \"lab_runs\".\"completed_at\" IS NOT NULL)"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.orders": {
+      "name": "orders",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "store_id": {
+          "name": "store_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "source_order_id": {
+          "name": "source_order_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "order_number": {
+          "name": "order_number",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "customer_name": {
+          "name": "customer_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "customer_email": {
+          "name": "customer_email",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "item_count": {
+          "name": "item_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "total_minor": {
+          "name": "total_minor",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "currency": {
+          "name": "currency",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "payment_status": {
+          "name": "payment_status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'paid'"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "orders_store_idx": {
+          "name": "orders_store_idx",
+          "columns": [
+            {
+              "expression": "store_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "orders_store_id_stores_id_fk": {
+          "name": "orders_store_id_stores_id_fk",
+          "tableFrom": "orders",
+          "tableTo": "stores",
+          "columnsFrom": [
+            "store_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "orders_store_source_unique": {
+          "name": "orders_store_source_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "store_id",
+            "source_order_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "orders_total_nonnegative": {
+          "name": "orders_total_nonnegative",
+          "value": "\"orders\".\"total_minor\" >= 0"
+        },
+        "orders_items_positive": {
+          "name": "orders_items_positive",
+          "value": "\"orders\".\"item_count\" > 0"
+        },
+        "orders_currency_usd_demo": {
+          "name": "orders_currency_usd_demo",
+          "value": "\"orders\".\"currency\" = 'USD'"
+        },
+        "orders_payment_demo": {
+          "name": "orders_payment_demo",
+          "value": "\"orders\".\"payment_status\" = 'paid'"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.simulator_receipts": {
+      "name": "simulator_receipts",
+      "schema": "",
+      "columns": {
+        "reference": {
+          "name": "reference",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "warehouse_reference": {
+          "name": "warehouse_reference",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "fingerprint": {
+          "name": "fingerprint",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "accepted_at": {
+          "name": "accepted_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "simulator_receipts_warehouse_reference_unique": {
+          "name": "simulator_receipts_warehouse_reference_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "warehouse_reference"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.simulator_requests": {
+      "name": "simulator_requests",
+      "schema": "",
+      "columns": {
+        "reference": {
+          "name": "reference",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "fingerprint": {
+          "name": "fingerprint",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "scenario": {
+          "name": "scenario",
+          "type": "lab_scenario",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "submission_count": {
+          "name": "submission_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "simulator_count_nonnegative": {
+          "name": "simulator_count_nonnegative",
+          "value": "\"simulator_requests\".\"submission_count\" >= 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.storefront_purchases": {
+      "name": "storefront_purchases",
+      "schema": "",
+      "columns": {
+        "run_id": {
+          "name": "run_id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "cart_fingerprint": {
+          "name": "cart_fingerprint",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "items": {
+          "name": "items",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "storefront_purchases_run_id_lab_runs_id_fk": {
+          "name": "storefront_purchases_run_id_lab_runs_id_fk",
+          "tableFrom": "storefront_purchases",
+          "tableTo": "lab_runs",
+          "columnsFrom": [
+            "run_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "storefront_items_array": {
+          "name": "storefront_items_array",
+          "value": "jsonb_typeof(\"storefront_purchases\".\"items\") = 'array' AND jsonb_array_length(\"storefront_purchases\".\"items\") BETWEEN 1 AND 4"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.stores": {
+      "name": "stores",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "slug": {
+          "name": "slug",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "dataset_version": {
+          "name": "dataset_version",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "snapshot_at": {
+          "name": "snapshot_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "stores_slug_unique": {
+          "name": "stores_slug_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "slug"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.submission_attempts": {
+      "name": "submission_attempts",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "run_id": {
+          "name": "run_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "attempt_number": {
+          "name": "attempt_number",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 1
+        },
+        "job_id": {
+          "name": "job_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "started_at": {
+          "name": "started_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "completed_at": {
+          "name": "completed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "result": {
+          "name": "result",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'pending'"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "submission_attempts_run_id_lab_runs_id_fk": {
+          "name": "submission_attempts_run_id_lab_runs_id_fk",
+          "tableFrom": "submission_attempts",
+          "tableTo": "lab_runs",
+          "columnsFrom": [
+            "run_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "submission_attempts_job_id_unique": {
+          "name": "submission_attempts_job_id_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "job_id"
+          ]
+        },
+        "attempt_run_number_unique": {
+          "name": "attempt_run_number_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "run_id",
+            "attempt_number"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "submission_budget_bound": {
+          "name": "submission_budget_bound",
+          "value": "\"submission_attempts\".\"attempt_number\" >= 1 AND \"submission_attempts\".\"attempt_number\" <= 3"
+        },
+        "attempt_result_known": {
+          "name": "attempt_result_known",
+          "value": "\"submission_attempts\".\"result\" IN ('pending','accepted','rejected','unavailable','unknown','interrupted')"
+        }
+      },
+      "isRLSEnabled": false
+    }
+  },
+  "enums": {
+    "public.event_tone": {
+      "name": "event_tone",
+      "schema": "public",
+      "values": [
+        "neutral",
+        "warning",
+        "success"
+      ]
+    },
+    "public.exception_status": {
+      "name": "exception_status",
+      "schema": "public",
+      "values": [
+        "needs_review",
+        "retry_scheduled",
+        "investigating",
+        "resolved"
+      ]
+    },
+    "public.failure_kind": {
+      "name": "failure_kind",
+      "schema": "public",
+      "values": [
+        "address_rejected",
+        "warehouse_unavailable",
+        "acknowledgement_unknown"
+      ]
+    },
+    "public.fulfillment_state": {
+      "name": "fulfillment_state",
+      "schema": "public",
+      "values": [
+        "awaiting_submission",
+        "submitting",
+        "acknowledgement_unknown",
+        "retry_scheduled",
+        "needs_review",
+        "acknowledged"
+      ]
+    },
+    "public.lab_run_state": {
+      "name": "lab_run_state",
+      "schema": "public",
+      "values": [
+        "queued",
+        "running",
+        "accepted",
+        "rejected",
+        "unavailable",
+        "unknown"
+      ]
+    },
+    "public.lab_scenario": {
+      "name": "lab_scenario",
+      "schema": "public",
+      "values": [
+        "accepted",
+        "address_rejected",
+        "unavailable",
+        "accepted_timeout",
+        "temporary_outage",
+        "lookup_unavailable"
+      ]
+    }
+  },
+  "schemas": {},
+  "sequences": {},
+  "roles": {},
+  "policies": {},
+  "views": {},
+  "_meta": {
+    "columns": {},
+    "schemas": {},
+    "tables": {}
+  }
+}
