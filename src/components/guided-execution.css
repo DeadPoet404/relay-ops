@@ -336,3 +336,13 @@
     transition: none !important;
   }
 }
+
+.ge-stage.ge-active-pulse {
+  background: linear-gradient(90deg, #f6f4ff00, #f6f4ff 8%, #f6f4ff00);
+  border-radius: 8px;
+  animation: ge-active-bg 1.8s ease infinite;
+}
+@keyframes ge-active-bg {
+  0%,100% { background-position: 0% 0%; }
+  50% { background-position: 100% 0%; }
+}

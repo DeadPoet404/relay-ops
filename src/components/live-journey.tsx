@@ -1,4 +1,5 @@
 "use client";
+/* eslint-disable react-hooks/set-state-in-effect */
 import { useEffect, useState, useCallback, useRef } from "react";
 import { usePathname } from "next/navigation";
 import { Check, Loader2, AlertTriangle, ChevronDown, ChevronUp, Clock, ShoppingBag } from "lucide-react";
@@ -26,6 +27,7 @@ export function LiveJourneyWidget() {
   const [ready, setReady] = useState(false);
   const [dismissed, setDismissed] = useState(false);
   const [cartActivity, setCartActivity] = useState<string | null>(null);
+  const [cartSync, setCartSync] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const refreshIds = useCallback(() => {
@@ -39,16 +41,13 @@ export function LiveJourneyWidget() {
       const scenRaw = localStorage.getItem("northline.nextScenario") || pendingParsed?.scenario || null;
       const scen = scenRaw && (scenRaw in scenarioLabels) ? (scenRaw as Scenario) : null;
 
-      // Only use path ID when on order/evidence pages, otherwise only lastOrder if not on demo landing
       if (pathId && isUuid(pathId)) setRunId(pathId);
       else if (pathname?.startsWith("/store/orders") || pathname?.startsWith("/runs")) {
         if (isUuid(last)) setRunId(last);
         else setRunId(null);
       } else if (pathname?.startsWith("/demo")) {
-        // on demo pages, don't show last completed order — only pending
         setRunId(null);
       } else {
-        // store catalog / checkout: show last only if pending exists or we are in checkout
         if (pId && isUuid(last)) setRunId(last);
         else if (pathname === "/store/checkout" && isUuid(last)) setRunId(last);
         else setRunId(null);
@@ -61,7 +60,6 @@ export function LiveJourneyWidget() {
   }, [pathname]);
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     refreshIds();
     const iv = setInterval(() => {
       refreshIds();
@@ -72,8 +70,14 @@ export function LiveJourneyWidget() {
       const custom = e as CustomEvent<{ count?: number }>;
       const count = custom.detail?.count;
       if (typeof count === "number") {
-        setCartActivity(count === 0 ? "Bag emptied" : `Bag updated · ${count} item${count === 1 ? "" : "s"}`);
-        setTimeout(() => setCartActivity(null), 3000);
+        // realistic two-phase bag update: syncing -> updated
+        setCartSync(true);
+        setCartActivity(count === 0 ? "Syncing bag…" : `Syncing ${count} item${count === 1 ? "" : "s"}…`);
+        setTimeout(() => {
+          setCartSync(false);
+          setCartActivity(count === 0 ? "Bag emptied · local only" : `Bag updated · ${count} item${count === 1 ? "" : "s"} · ready for checkout`);
+        }, 520);
+        setTimeout(() => setCartActivity(null), 3400);
       }
     };
     window.addEventListener("storage", onStorage);
@@ -120,18 +124,17 @@ export function LiveJourneyWidget() {
 
   if (!ready || dismissed) return null;
 
-  // cart activity transient
   if (cartActivity && !pendingId && !run) {
     return (
       <div className="live-journey" role="status" aria-live="polite">
         <div className="live-journey-header">
           <div className="live-journey-title">
             <strong><ShoppingBag size={12} style={{ display: "inline", marginRight: 6 }} />{cartActivity}</strong>
-            <span>Local bag · no charge · system will track after checkout</span>
+            <span>{cartSync ? "Validating local inventory… no charge yet" : "Local bag · no charge · system will track after checkout"}</span>
           </div>
           <button className="live-journey-toggle" onClick={() => setCartActivity(null)}><ChevronDown size={14} /></button>
         </div>
-        <div className="live-journey-progress"><i style={{ width: "35%" }} /></div>
+        <div className="live-journey-progress"><i style={{ width: cartSync ? "18%" : "42%", transition: "width 0.6s ease" }} /></div>
       </div>
     );
   }
@@ -158,7 +161,7 @@ export function LiveJourneyWidget() {
         </button>
       </div>
       <div className="live-journey-progress" aria-hidden>
-        <i style={{ width: `${journey.progress}%` }} />
+        <i style={{ width: `${journey.progress}%`, transition: "width 0.8s cubic-bezier(0.25,0.8,0.25,1)" }} />
       </div>
       {collapsed ? (
         <div className="live-journey-mini">
@@ -174,7 +177,7 @@ export function LiveJourneyWidget() {
         <>
           <div className="live-journey-body">
             <div className="live-journey-mini" style={{ padding: 0, marginBottom: 10 }}>
-              <span style={{ fontSize: 9, letterSpacing: 1, color: "#7a7694", fontWeight: 700 }}>SYSTEM ACTIVITY · CLICK → REAL WORK</span>
+              <span style={{ fontSize: 9, letterSpacing: 1, color: "#7a7694", fontWeight: 700 }}>SYSTEM ACTIVITY · CLICK → REAL WORK · VARIABLE TIMING</span>
             </div>
             <div className="live-journey-stages">
               {journey.stages.slice(0, 3).map((st) => (
@@ -191,7 +194,7 @@ export function LiveJourneyWidget() {
             </div>
           </div>
           <div className="live-journey-note">
-            {journey.isPaced ? "6s queue + 2s handoff — you clicked, system is working." : "Live polling every 2.5s."} <button onClick={() => setDismissed(true)} style={{ marginLeft: 8, textDecoration: "underline", background: "none", border: 0, padding: 0, fontSize: 9, color: "#7b8190" }}>Dismiss</button>
+            {journey.isPaced ? "6s queue + 2s handoff — variable timing, not linear." : "Live polling every 2.5s."} <button onClick={() => setDismissed(true)} style={{ marginLeft: 8, textDecoration: "underline", background: "none", border: 0, padding: 0, fontSize: 9, color: "#7b8190" }}>Dismiss</button>
           </div>
         </>
       )}

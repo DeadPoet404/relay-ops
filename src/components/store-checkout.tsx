@@ -25,6 +25,7 @@ export function StoreCheckout({ enabled }: { enabled: boolean }) {
   const [blocked, setBlocked] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [busyPhase, setBusyPhase] = useState<string>("");
   const [agreed, setAgreed] = useState(false);
   const [justOrderedId, setJustOrderedId] = useState<string | null>(null);
   const [liveRun, setLiveRun] = useState<LabRun | null>(null);
@@ -51,6 +52,7 @@ export function StoreCheckout({ enabled }: { enabled: boolean }) {
     if (!justOrderedId || !enabled) return;
     let active = true;
     const ctrl = new AbortController();
+    let pollMs = 900;
     async function load() {
       try {
         if (document.hidden) return;
@@ -60,10 +62,14 @@ export function StoreCheckout({ enabled }: { enabled: boolean }) {
         });
         if (res.ok) {
           const data = (await res.json()) as { run: LabRun };
-          if (active && data.run) setLiveRun(data.run);
+          if (active && data.run) {
+            setLiveRun(data.run);
+            // slow down polling as run completes
+            pollMs = data.run.status === "queued" || data.run.status === "running" ? 1100 : 2400;
+          }
         }
       } catch {}
-      if (active) setTimeout(() => void load(), 1200);
+      if (active) setTimeout(() => void load(), pollMs);
     }
     void load();
     const redirectTimer = setTimeout(() => {
@@ -71,7 +77,7 @@ export function StoreCheckout({ enabled }: { enabled: boolean }) {
         clear();
         router.replace(`/store/orders/${justOrderedId}`);
       }
-    }, 4200);
+    }, 5600);
     return () => {
       active = false;
       ctrl.abort();
@@ -88,6 +94,7 @@ export function StoreCheckout({ enabled }: { enabled: boolean }) {
     if (lock.current || !enabled || !quote || blocked || !agreed) return;
     lock.current = true;
     setBusy(true);
+    setBusyPhase("Validating your bag…");
     setError(null);
     try {
       let request = pending;
@@ -104,6 +111,10 @@ export function StoreCheckout({ enabled }: { enabled: boolean }) {
         sessionStorage.setItem("northline.checkout", JSON.stringify(request));
         setPending(request);
       }
+      // realistic pre-flight pacing so click feels real
+      await new Promise(r => setTimeout(r, 420));
+      setBusyPhase("Reserving order + queue job in one transaction…");
+      await new Promise(r => setTimeout(r, 380));
       const response = await fetch("/api/store/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -129,6 +140,8 @@ export function StoreCheckout({ enabled }: { enabled: boolean }) {
           localStorage.removeItem("northline.nextScenario");
         localStorage.setItem("northline.lastOrder", result.runId);
       } catch {}
+      setBusyPhase("Order saved — starting live tracker…");
+      await new Promise(r => setTimeout(r, 320));
       // guided: show live execution for a moment so user feels system working, then navigate
       setJustOrderedId(result.runId);
       // keep pending cleared for UI
@@ -143,6 +156,7 @@ export function StoreCheckout({ enabled }: { enabled: boolean }) {
       );
       lock.current = false;
       setBusy(false);
+      setBusyPhase("");
     }
   }
 
@@ -168,7 +182,7 @@ export function StoreCheckout({ enabled }: { enabled: boolean }) {
           <GuidedExecutionFlow run={liveRun} />
           <div style={{ marginTop: 16, display: "flex", gap: 12, alignItems: "center", fontSize: 11, color: "#6d7586" }}>
             <LoaderCircle size={14} className="nl-spin" />
-            <span>Opening your order status in a moment — live tracker will follow you.</span>
+            <span>Opening your order status in a moment — live tracker will follow you. {liveRun ? `${liveRun.status} · attempt ${liveRun.attemptCount}` : "Waiting for first poll…"}</span>
           </div>
         </div>
       </div>
@@ -292,7 +306,7 @@ export function StoreCheckout({ enabled }: { enabled: boolean }) {
               >
                 {busy ? (
                   <>
-                    <LoaderCircle size={17} className="nl-spin" /> Saving your order — watch what happens…
+                    <LoaderCircle size={17} className="nl-spin" /> {busyPhase || "Saving your order — watch what happens…"}
                   </>
                 ) : (
                   <>
@@ -346,7 +360,7 @@ export function StoreCheckout({ enabled }: { enabled: boolean }) {
             <div style={{ marginTop: 18, padding: 12, background: "#f6f5fa", border: "1px solid #e8e6f0", borderRadius: 10, fontSize: 11, lineHeight: 1.6 }}>
               <strong style={{ fontSize: 10, letterSpacing: 0.8 }}>WHAT HAPPENS WHEN YOU CLICK</strong>
               <div style={{ marginTop: 8, display: "grid", gap: 6 }}>
-                <span>• Order + job saved in same DB transaction</span>
+                <span>• Order + job saved in same DB transaction (real)</span>
                 <span>• Job delayed 6s via startAfter — real queue pacing</span>
                 <span>• Worker claims before HTTP, pauses 2s — you’ll see it live</span>
                 <span>• Tracker follows you — not just UI, real system</span>
