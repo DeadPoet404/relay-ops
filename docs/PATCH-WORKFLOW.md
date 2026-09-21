@@ -59,3 +59,20 @@ npm ci
 Then follow `docs/PERSISTENCE.md`: configure the ignored local environment, start PostgreSQL, apply migrations, and seed the fictional dataset before selecting database mode. New dependencies are already recorded in the lockfile. Do not run create-next-app, regenerate the initial migration, or recommit the patch manually.
 
 Increment 002 also adds a GitHub Actions workflow. If GitHub rejects the push because your OAuth token lacks the workflow scope, run `gh auth refresh -h github.com -s workflow` and retry the push. Check the Actions tab to verify the remote checks actually ran; local test success does not establish a remote workflow result.
+
+## Increment 003
+
+Apply `003-relay-execution.patch` over increment 002. The published source checked during preparation was `ca71a6d` in `DeadPoet404/relay-ops`; its tracked tree matched the local persistence baseline.
+
+```bash
+git am "$HOME/Downloads/003-relay-execution.patch"
+npm ci
+npm run db:migrate
+npm run db:seed
+npm run queue:init
+npm run demo:configure
+```
+
+Do not regenerate migrations or reset the database. Node 22.12+ is now required by the pinned pg-boss release. Start the simulator, worker, and loopback development UI in separate terminals as described in `docs/EXECUTION.md`. `demo:configure` adds ignored `.env.local` settings; it does not commit credentials.
+
+The database test suite now also clears the test database's simulator/run tables and jobs and spawns real short-lived worker processes. Never supply a non-disposable database.

@@ -130,3 +130,74 @@ export const auditEvents = pgTable(
     index("audit_intent_time_idx").on(table.intentId, table.occurredAt),
   ],
 );
+
+// Executable local demonstrations. Provider receipts intentionally have no FK to
+// Relay's records: the worker can only discover provider outcomes over HTTP.
+export const labScenario = pgEnum("lab_scenario", [
+  "accepted",
+  "address_rejected",
+  "unavailable",
+  "accepted_timeout",
+]);
+export const labRunState = pgEnum("lab_run_state", [
+  "queued",
+  "running",
+  "accepted",
+  "rejected",
+  "unavailable",
+  "unknown",
+]);
+export const labRuns = pgTable(
+  "lab_runs",
+  {
+    id: uuid("id").primaryKey(),
+    storeId: uuid("store_id")
+      .notNull()
+      .references(() => stores.id),
+    intentId: uuid("intent_id")
+      .notNull()
+      .unique()
+      .references(() => fulfillmentIntents.id),
+    scenario: labScenario("scenario").notNull(),
+    status: labRunState("status").notNull().default("queued"),
+    createdAt: time("created_at").notNull(),
+    completedAt: time("completed_at"),
+  },
+  (table) => [
+    index("lab_runs_store_created_idx").on(table.storeId, table.createdAt),
+    check(
+      "lab_completion_consistent",
+      sql`(${table.status} IN ('queued','running') AND ${table.completedAt} IS NULL) OR (${table.status} NOT IN ('queued','running') AND ${table.completedAt} IS NOT NULL)`,
+    ),
+  ],
+);
+
+export const submissionAttempts = pgTable(
+  "submission_attempts",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    runId: uuid("run_id")
+      .notNull()
+      .unique()
+      .references(() => labRuns.id),
+    startedAt: time("started_at").notNull(),
+    completedAt: time("completed_at"),
+    result: text("result").notNull().default("pending"),
+  },
+  (table) => [
+    check(
+      "attempt_result_known",
+      sql`${table.result} IN ('pending','accepted','rejected','unavailable','unknown','interrupted')`,
+    ),
+  ],
+);
+
+export const simulatorReceipts = pgTable("simulator_receipts", {
+  reference: text("reference").primaryKey(),
+  warehouseReference: uuid("warehouse_reference")
+    .notNull()
+    .defaultRandom()
+    .unique(),
+  fingerprint: text("fingerprint").notNull(),
+  acceptedAt: time("accepted_at").notNull().defaultNow(),
+});

@@ -1,6 +1,6 @@
 # Relay — project brief
 
-> **Current implementation: increment 002.** The interface foundation and PostgreSQL persistence/domain layer are implemented. See [PERSISTENCE.md](PERSISTENCE.md) for the shipped scope and limitations. The architecture below describes the target system; Shopify ingestion, worker execution, and live recovery are not implemented yet.
+> **Current implementation: increment 003.** The console, persistence/domain layer, transactional queue, separate worker, and local HTTP warehouse simulator are implemented. See [EXECUTION.md](EXECUTION.md) for the shipped execution boundary. Real Shopify ingestion, production access control, and safe business retries/reconciliation are still deferred.
 
 ## Product and audience
 

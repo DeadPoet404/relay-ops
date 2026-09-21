@@ -16,29 +16,9 @@ import {
   stores,
 } from "../src/db/schema";
 
-// This suite clears its tables. Reject missing, non-test, remote, and app URLs.
-const testUrl = process.env.TEST_DATABASE_URL;
-if (!testUrl)
-  throw new Error(
-    "TEST_DATABASE_URL is required. Use a dedicated local database ending in _test.",
-  );
-const parsed = new URL(testUrl);
-if (
-  !/^postgres(ql)?:$/.test(parsed.protocol) ||
-  !["localhost", "127.0.0.1", "[::1]"].includes(parsed.hostname) ||
-  !/^\/[a-z0-9_]+_test$/.test(parsed.pathname)
-) {
-  throw new Error(
-    "Integration tests require a dedicated loopback PostgreSQL database ending in _test.",
-  );
-}
-if (process.env.DATABASE_URL) {
-  const app = new URL(process.env.DATABASE_URL);
-  if (app.pathname === parsed.pathname)
-    throw new Error(
-      "The test database must differ from the application database.",
-    );
-}
+import { testDatabaseUrl } from "./test-database";
+const testUrl = testDatabaseUrl();
+
 const { db, pool } = createDatabase(testUrl);
 
 beforeAll(async () => {
@@ -55,7 +35,7 @@ beforeAll(async () => {
 });
 beforeEach(async () => {
   await db.execute(
-    sql`TRUNCATE TABLE audit_events, exceptions, fulfillment_intents, orders, stores`,
+    sql`TRUNCATE TABLE submission_attempts, lab_runs, simulator_receipts, audit_events, exceptions, fulfillment_intents, orders, stores`,
   );
   await seedDemo(db);
 });

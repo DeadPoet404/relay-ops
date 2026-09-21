@@ -281,6 +281,8 @@ export function formatMoney(cents: number) {
 }
 
 export function formatAge(minutes: number) {
+  if (minutes >= 1440)
+    return `${Math.floor(minutes / 1440)}d ${Math.floor((minutes % 1440) / 60)}h`;
   return minutes >= 60
     ? `${Math.floor(minutes / 60)}h ${minutes % 60}m`
     : `${minutes}m`;

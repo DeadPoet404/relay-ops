@@ -1,5 +1,7 @@
 # Increment 002 — persistence and state model
 
+> Historical design notes for Patch 002. Patch 003 adds a guarded local-demo write endpoint, worker, queue, and simulator; current commands, test counts, and boundaries are documented in [EXECUTION.md](EXECUTION.md) and the README.
+
 ## What changed
 
 Increment 001 bundled presentation fixtures inside the console. Increment 002 makes the console a consumer of a serializable `ConsoleData` prop. A server-only boundary selects either the explicit standalone fixture adapter or a PostgreSQL repository. All counts, scenario previews, details, and activity use that same selected dataset.

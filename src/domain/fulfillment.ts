@@ -65,6 +65,7 @@ export const fulfillmentEventSchema = z.discriminatedUnion("type", [
     .object({
       type: z.literal("review_required"),
       reason: z.string().trim().min(1).max(1000),
+      kind: z.enum(failureKinds).optional(),
     })
     .strict(),
 ]);

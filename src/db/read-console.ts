@@ -67,7 +67,20 @@ export async function readConsole(
         ({ order, intent, exception }) => {
           if (exception.status !== exceptionStatusFor(intent.state))
             throw new Error("Inconsistent exception and fulfillment states");
-          const details = scenarioDetails[exception.kind];
+          const details = order.sourceOrderId.startsWith("lab-")
+            ? {
+                description:
+                  exception.kind === "address_rejected"
+                    ? "The executable warehouse simulator returned a confirmed address rejection. The worker recorded this exception; no new submission has been scheduled."
+                    : exception.kind === "warehouse_unavailable"
+                      ? "The executable warehouse simulator returned its documented temporary-unavailability response. This run is held for review; automatic business retries are not enabled."
+                      : "The worker could not establish the original submission outcome. The warehouse may have accepted it. Queue redelivery will not submit this order again.",
+                nextStep:
+                  exception.kind === "address_rejected"
+                    ? "Verify and correct the shipping details before a future authorized submission. The address-correction workflow is not enabled yet."
+                    : "Inspect the recorded evidence. Safe recovery and reconciliation arrive in the next increment; do not blindly resubmit.",
+              }
+            : scenarioDetails[exception.kind];
           return {
             id: exception.id,
             orderNumber: order.orderNumber,

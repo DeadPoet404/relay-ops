@@ -2,6 +2,7 @@ import { demoOrders, type OrderException } from "./demo-data";
 
 export interface ConsoleData {
   source: "fixtures" | "database";
+  labEnabled?: boolean;
   storeName: string;
   snapshotAt: string;
   orders: OrderException[];

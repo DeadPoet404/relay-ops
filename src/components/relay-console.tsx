@@ -41,6 +41,8 @@ import {
 
 import { snapshotLabel, type ConsoleData } from "@/lib/console-data";
 
+import { ExecutionLab } from "./execution-lab";
+
 type View = "exceptions" | "activity" | "connections" | "demo";
 const navigation = [
   { id: "exceptions", label: "Exceptions", icon: Inbox },
@@ -72,7 +74,8 @@ function Brand() {
   );
 }
 
-export function RelayConsole({ data }: { data: ConsoleData }) {
+export function RelayConsole({ data: initialData }: { data: ConsoleData }) {
+  const [data, setData] = useState(initialData);
   const demoOrders = data.orders;
   const persisted = data.source === "database";
   const exampleOrder = demoOrders.find(
@@ -170,7 +173,7 @@ export function RelayConsole({ data }: { data: ConsoleData }) {
         >
           <FlaskConical size={18} strokeWidth={1.7} />
           <span>Demo lab</span>
-          <span className="tiny-label">02</span>
+          <span className="tiny-label">03</span>
         </button>
         <div className="sidebar-bottom">
           <div className="build-note">
@@ -190,7 +193,11 @@ export function RelayConsole({ data }: { data: ConsoleData }) {
             <div className="avatar operator-avatar">OP</div>
             <div>
               <strong>Operations preview</strong>
-              <span>Read-only · fictional store</span>
+              <span>
+                {data.labEnabled
+                  ? "Local lab · fictional store"
+                  : "Read-only · fictional store"}
+              </span>
             </div>
           </div>
         </div>
@@ -272,9 +279,9 @@ export function RelayConsole({ data }: { data: ConsoleData }) {
                   ? "PostgreSQL connected. Still a fictional store."
                   : "Standalone fixture preview. No database connected."}
               </strong>{" "}
-              No live orders or recovery jobs.
+              Synthetic data only. No live customer orders.
             </span>
-            <span className="banner-version">PERSISTENCE / 002</span>
+            <span className="banner-version">EXECUTION / 003</span>
           </div>
           {view === "exceptions" && (
             <>
@@ -313,7 +320,7 @@ export function RelayConsole({ data }: { data: ConsoleData }) {
                 <Metric
                   label="Retry scheduled"
                   value={String(retryCount).padStart(2, "0")}
-                  detail="Demo states · no active worker"
+                  detail="Seed retry states · not active jobs"
                   icon={<Clock3 size={17} />}
                 />
                 <Metric
@@ -562,7 +569,12 @@ export function RelayConsole({ data }: { data: ConsoleData }) {
           )}
           {view === "connections" && <ConnectionsView source={data.source} />}
           {view === "demo" && (
-            <DemoView orders={data.orders} onSelect={openOrder} />
+            <DemoView
+              orders={data.orders}
+              onSelect={openOrder}
+              enabled={data.labEnabled ?? false}
+              onData={setData}
+            />
           )}
           <footer className="page-footer">
             <span>
@@ -676,7 +688,7 @@ export function RelayConsole({ data }: { data: ConsoleData }) {
                 <div className="drawer-bottom">
                   <div className="disabled-action-note">
                     <Info size={14} />
-                    <span>Preview only. No warehouse is connected.</span>
+                    <span>Preview only. No live warehouse is connected.</span>
                   </div>
                   <button className="button button-primary" disabled>
                     <ShieldCheck size={16} />
@@ -709,7 +721,7 @@ export function RelayConsole({ data }: { data: ConsoleData }) {
             <span className="about-mark">
               <ShieldCheck size={25} />
             </span>
-            <div className="eyebrow">RELAY · INCREMENT 002</div>
+            <div className="eyebrow">RELAY · INCREMENT 003</div>
             <Dialog.Title>
               A little clarity between
               <br />
@@ -717,8 +729,9 @@ export function RelayConsole({ data }: { data: ConsoleData }) {
             </Dialog.Title>
             <Dialog.Description>
               Relay is an order exception and recovery console. This increment
-              adds durable records, validated state changes, and an append-only
-              audit trail—before we automate recovery.
+              executes fictional orders through a durable worker and local
+              warehouse simulator, recording uncertainty without blind
+              resubmission.
             </Dialog.Description>
             <div className="about-facts">
               <p>
@@ -733,7 +746,7 @@ export function RelayConsole({ data }: { data: ConsoleData }) {
               </p>
               <p>
                 <Info size={15} />
-                No authentication or live integrations yet
+                Local simulator only; no authentication or live integrations
               </p>
             </div>
             <button
@@ -796,13 +809,16 @@ function ActivityView({
         <div>
           <div className="eyebrow">THE PAPER TRAIL</div>
           <h1>Activity</h1>
-          <p>Every event has context. Every decision should leave a trace.</p>
+          <p>
+            Events for exception records. Full execution trails—including
+            successful runs—are in Demo lab.
+          </p>
         </div>
         <span className="subtle-chip">{events.length} demo events</span>
       </section>
       <section className="activity-panel">
         <div className="section-bar">
-          <h2>Event history</h2>
+          <h2>Exception event history</h2>
           <span>{snapshotLabel(data.snapshotAt)} · newest first</span>
         </div>
         {events.map((event) => (
@@ -877,30 +893,31 @@ function ConnectionsView({ source }: { source: ConsoleData["source"] }) {
           <span className="connection-logo warehouse-logo">
             <PackageCheck size={26} />
           </span>
-          <span className="subtle-chip">Not implemented</span>
+          <span className="subtle-chip">Local service · not probed</span>
           <h2>Warehouse simulator</h2>
           <p>
             A controlled environment for rejected addresses, service outages,
-            and ambiguous timeouts. This increment shows sample outcomes only.
+            and ambiguous timeouts. The Demo lab can now run these scenarios
+            against the local simulator.
           </p>
           <div className="connection-meta">
             <span>Current execution</span>
-            <strong>No network requests or jobs</strong>
+            <strong>Separate worker and simulator processes</strong>
           </div>
           <button className="button button-secondary" disabled>
             <FlaskConical size={15} />
-            Simulator arrives in increment 003
+            Start with npm run simulator
           </button>
         </div>
       </div>
       <div className="plain-notice">
         <ShieldCheck size={19} />
         <div>
-          <strong>No credentials needed.</strong>
+          <strong>No customer credentials needed.</strong>
           <p>
-            This demonstration does not collect API keys or connect to customer
-            systems. We will add secret handling, authentication, and webhook
-            verification before using real store data.
+            The local simulator uses a generated server-only token. It does not
+            connect to customer systems. Real-store authentication and webhook
+            verification come later.
           </p>
         </div>
       </div>
@@ -911,7 +928,11 @@ function ConnectionsView({ source }: { source: ConsoleData["source"] }) {
 function DemoView({
   orders,
   onSelect,
+  enabled,
+  onData,
 }: {
+  enabled: boolean;
+  onData: (data: ConsoleData) => void;
   orders: OrderException[];
   onSelect: (order: OrderException) => void;
 }) {
@@ -962,18 +983,20 @@ function DemoView({
           <div className="eyebrow">MAKE FAILURE UNDERSTANDABLE</div>
           <h1>Demo lab</h1>
           <p>
-            Three failure scenarios. Three different paths to a safe outcome.
+            Run an order through failure. Inspect the evidence it leaves behind.
           </p>
         </div>
-        <span className="subtle-chip">Scenario previews</span>
+        <span className="subtle-chip">Simulator / worker / audit</span>
       </section>
+      <ExecutionLab enabled={enabled} onData={onData} />
       <div className="lab-notice">
         <FlaskConical size={20} />
         <div>
-          <strong>Inspect the examples. Execution comes next.</strong>
+          <strong>Explore the original snapshot examples.</strong>
           <p>
-            These cards inspect the currently loaded demo records. They do not
-            trigger failures, schedule retries, or change order state.
+            The cards below inspect existing records. They do not execute new
+            runs. They do not trigger failures, schedule retries, or change
+            order state.
           </p>
         </div>
       </div>

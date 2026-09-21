@@ -2,13 +2,13 @@
 
 ### Order exception & recovery console
 
-A monitoring and recovery layer between a Shopify store and its fulfillment provider. Relay answers: **which paid orders are not progressing toward fulfillment, why, and what is the safe next step?**
+Relay explores the systems between payment and fulfillment: **which orders are stuck, what evidence do we have, and what is safe to do next?**
 
-**Status: increment 002 — persistence and domain foundation.** Northline Supply, its customers, orders, and warehouse responses are fictional. The interface now supports real PostgreSQL persistence for this fictional dataset. There is still no Shopify integration, warehouse API, job worker, authentication, or public recovery action.
+**Current increment: 003 — executable local demo.** The console, PostgreSQL persistence, durable queue, background worker, and HTTP warehouse simulator work together. All customers, paid orders, and warehouse records remain fictional. There is no Shopify integration, real shipment creation, automatic business retry/reconciliation, or production authentication.
 
-## Start the persisted demo
+## Local setup
 
-Requires **Node.js 22+**, npm, and Docker with **Docker Compose v2**. `.nvmrc` selects Node 22. Run commands from the project root. If you already have a local PostgreSQL 17 installation, Docker is optional; configure equivalent application and test databases instead.
+Requires **Node.js 22.12+**, npm, and PostgreSQL 17. `.nvmrc` selects Node 22. Docker Compose v2 is the provided database setup; an equivalent native PostgreSQL installation also works.
 
 ```bash
 npm ci
@@ -16,24 +16,66 @@ test -f .env || cp .env.example .env
 npm run db:up
 npm run db:migrate
 npm run db:seed
-npm run dev
+npm run queue:init
+npm run demo:configure
 ```
 
-Open http://localhost:3000. The banner should say **“PostgreSQL connected. Still a fictional store.”** The top badge reads **“Persisted demo.”** Restart Next.js after changing environment variables.
+`db:seed` inserts the Northline example dataset once and never overwrites compatible existing records. Application migrations are committed under `drizzle/`; pg-boss manages a separate `relay_jobs` schema. `queue:init` installs that schema and submission queue; it does not start a worker.
 
-`.env.example` contains intentionally public, **local-only** development credentials. PostgreSQL is bound to loopback on port 5433 by Compose. Never reuse these credentials on a deployed database. `.env` and `.env.local` are ignored by Git; `.env.example` is tracked.
+`demo:configure` enables local execution and generates/retains a private simulator token in the ignored `.env.local`. It preserves unrelated settings and does not print the token. `.env.local` overrides `.env`, but exported shell variables take precedence over both. Restart processes after changes.
 
-The seeder creates **10 orders, 10 fulfillment intents, 10 exceptions, and 37 audit events**. Rerunning `npm run db:seed` is a no-op for an existing compatible demo dataset: it never resets your records. Initial data is a fixed snapshot at 20 September 2026, 10:00 UTC, not a live clock or scheduled job.
+Use three terminals in the project root:
 
-## Standalone fixture preview
+```bash
+# Terminal 1 — simulated warehouse
+npm run simulator
+```
 
-Without environment variables, the app defaults to fixture mode and needs no database. To select it explicitly even when `.env` exists:
+```bash
+# Terminal 2 — durable job consumer
+npm run worker
+```
+
+```bash
+# Terminal 3 — loopback development web app
+npm run demo:dev
+```
+
+Open **http://localhost:3000**, then Demo lab. Use that exact origin unless you deliberately change `RELAY_DEMO_ORIGIN`. Both `dev` and `demo:dev` bind to loopback by default. Do not expose an enabled local lab through a public proxy.
+
+## What to demonstrate
+
+| Scenario                                  | Result                                                     |
+| ----------------------------------------- | ---------------------------------------------------------- |
+| Normal acceptance                         | A warehouse acknowledgement; no new exception              |
+| Address rejection                         | A review item; no unchanged-input retry                    |
+| Temporary warehouse outage                | A visible exception; automatic business retries remain off |
+| Acceptance followed by a delayed response | Outcome unknown, even though the simulator saved a receipt |
+
+Each run creates one synthetic paid order and a pg-boss job **in the same database transaction**. The worker commits a durable claim before sending an HTTP request. If it crashes after that claim, redelivery marks the order unknown rather than submitting again. The lab shows queue state, claimed attempts, acknowledgement, and audit history for the latest 10 runs.
+
+**Queue completion means the job recorded its outcome—not that the warehouse accepted or fulfilled the order.** Queue/infrastructure retries and business retries are separate concepts. The former are enabled for worker failures; the latter are not implemented yet.
+
+The UI polls while the lab is active. Closing the browser does not stop the worker. Refreshing results does not trigger another fulfillment request. A failed creation response retains its UUID and offers Retry same request, including across reloads when browser session storage is available.
+
+## Read-only modes
+
+For a standalone fixture preview without a database:
 
 ```bash
 RELAY_DATA_SOURCE=fixtures npm run dev
 ```
 
-This is visibly labelled **“Fixture demo.”** Database mode never silently falls back to fixtures on an error. It shows a setup/error page instead; `/api/console` returns a redacted 503 response.
+For a production-mode read-only preview:
+
+```bash
+npm run build
+npm start
+```
+
+**Production always disables the local lab API**, even if the demo opt-in is set. Fixture mode also disables execution. The `start` server binds to all interfaces for preview compatibility, but that is not permission to add real customer data: read APIs are still unauthenticated. Use only synthetic records.
+
+Database mode never silently substitutes fixtures on failure. The page shows an explicit unavailable-data message and `/api/console` returns a redacted 503 response.
 
 ## Verify
 
@@ -45,80 +87,67 @@ npm run test:db
 npm run build
 ```
 
-- Unit suite: **24 tests**, no database required.
-- PostgreSQL suite: **12 integration tests**, requires a dedicated local `TEST_DATABASE_URL` whose database name ends in `_test`. **It truncates the five Relay tables in that test database before every test. Never point it at a database with data you want to keep.** It refuses non-loopback hosts and a database name matching `DATABASE_URL`.
-- GitHub Actions runs lint, types, both test suites, migrations, seeding, and a production build against a PostgreSQL service. The workflow is configuration until it has actually run successfully on your repository; check the Actions tab after pushing.
+- **33 unit tests**: fixtures, filtering, display, domain policy, configuration, origin guards, and bounded request parsing.
+- **24 database/integration tests**: persistence, transactional rollback, duplicate/concurrent requests, all simulator outcomes, queue redelivery, and real worker stop/restart/SIGKILL cases.
+- GitHub Actions is configured to run the same core checks with PostgreSQL. Check the actual Actions result after pushing; configuration is not proof a remote run succeeded.
 
-Compose creates `relay_ops_test` when initializing a **new** data volume. For an existing volume without it:
+**The integration suite truncates application/simulator tables and deletes queue jobs in its dedicated test database.** `TEST_DATABASE_URL` must point to a disposable loopback database whose name ends in `_test`, different from the application's database. Never use a database containing valuable data. Do not run multiple test suites against the same test database concurrently.
+
+Compose creates `relay_ops_test` only when initializing a new data volume. If it is missing from an existing volume:
 
 ```bash
 docker compose exec -T db psql -U relay -d postgres -c 'CREATE DATABASE relay_ops_test;'
 ```
 
-If it already exists, don't recreate or delete it. See [the persistence guide](docs/PERSISTENCE.md) for troubleshooting.
+If it exists, don't drop it. Dependency deprecation warnings in the pinned toolchain are distinct from failed checks; do not blindly apply `npm audit fix --force`.
 
-## What works
+## Architecture and stack
 
-- Responsive exception queue, combined search/type/status filtering, sorting, order inspection, and activity history.
-- Typed, validated state-transition rules that distinguish an uncertain submission from an authorized retry.
-- PostgreSQL schema, foreign keys, uniqueness and consistency checks, tracked Drizzle migrations.
-- Repeatable-read, store-scoped data projection for the console.
-- An internal transactional event service with row locking, expected-version checks, state/exception updates, and audit insertion.
-- PostgreSQL triggers reject ordinary updates and deletes of audit events.
-- A read-only, uncached `GET /api/console` endpoint serving the selected fictional dataset.
-- Clear unavailable/empty/loading states; scenario cards inspect the loaded data rather than importing their own fixtures.
-- Keyboard-focus restoration, accessible dialog primitives, responsive navigation, and reduced-motion support.
-
-The state service is deliberately **not** exposed through HTTP or server actions. Structured evidence is validated, but its truth is the connector caller's responsibility. No job is scheduled and no external order is submitted by the service. A privileged database owner can still disable triggers or truncate tables; the audit trail is not a tamper-proof ledger.
-
-## Current boundaries
-
-- One fictional store, USD only, paid demonstration orders, one fulfillment intent and one exception per order.
-- UI-only search/filter/navigation state resets on reload. Database records persist.
-- Snapshot time represents the latest recorded observation, not elapsed wall-clock time. Seeded retries are examples, not jobs.
-- Authentication, real eligibility decisions, webhook receipt/deduplication, partial fulfillment, recurring exception episodes, and job delivery belong to later increments.
-- No pagination yet: the initial projection is sized for a small demo dataset.
-- No claim of production readiness, exactly-once external execution, recovered revenue, or verified customer outcomes.
-
-## Stack
-
-Next.js App Router, TypeScript, Tailwind CSS 4, Radix Dialog, Lucide, PostgreSQL 17, Drizzle ORM/Kit, node-postgres, Zod, ESLint, Vitest, and tsx. Versions are locked in `package-lock.json`. Fonts use a system stack; no runtime font CDN is required.
-
-pg-boss and the executable warehouse simulator arrive in increment 003. The worker will be a separate process, not an in-memory timer in Next.js.
-
-## Project layout
+Next.js App Router, TypeScript, Tailwind CSS 4, Radix Dialog, Lucide, PostgreSQL 17, Drizzle, node-postgres, Zod, **pg-boss**, Vitest, and tsx. Versions are locked in `package-lock.json`. System fonts avoid a runtime CDN dependency.
 
 ```text
-src/app/                 Server-rendered page, read API, loading/error UI
-src/components/          Client-side console receiving a serializable data prop
-src/domain/              Pure fulfillment rules and validation
-src/db/                  Schema, connection factory, seed, reads, transactional writes
-src/server/              Server-only configuration/pool boundary
-src/lib/                 Shared presentation contracts and standalone fixtures
-scripts/                 Environment loading, migration and seed commands
-drizzle/                 Committed SQL migrations and schema snapshots
-tests/                   PostgreSQL integration tests
-.github/workflows/ci.yml Repeatable repository checks
+src/app/          Server page, read API, guarded local-demo API
+src/components/   Exception console and executable Demo lab
+src/domain/       Pure, validated fulfillment state transitions
+src/db/           Schema, migrations adapter, seed, reads, atomic state/audit writes
+src/lab/          Local execution contracts, request policy, run creation/projection
+src/queue/        pg-boss configuration and initialization
+src/worker/       Durable claim and submission processing
+src/simulator/    HTTP provider simulator and its connector
+src/server/       Server-only database/queue boundaries
+scripts/          CLI entry points and local environment configuration
+drizzle/          Tracked application SQL migrations and snapshots
+tests/            Disposable-database and worker-process integration tests
 ```
+
+The worker communicates with the simulator over authenticated loopback HTTP. The browser calls only same-origin paths. Although the simulator shares the local PostgreSQL instance, the worker does not read simulator receipts to bypass the integration boundary.
+
+## Boundaries and security
+
+- One fictional store, paid demo orders, USD, one fulfillment intent/exception per order.
+- Original seed examples retain their original snapshot timestamps. New runtime events advance observation time; older examples can show larger ages.
+- A run is capped at one claimed submission attempt in this increment. Unknown outcomes require later reconciliation, not an automatic replay button.
+- The local lab is capped at 100 total runs and displays the latest 10. This is a demo bound, not a production rate limiter.
+- Audit row updates/deletes are rejected by a PostgreSQL trigger, but privileged owners can bypass it. It is not a tamper-proof ledger.
+- Request/queue deduplication and local concurrency checks are **not** a claim of exactly-once external execution.
+- Host/Origin validation and development flags are local browser safeguards, not production authentication. Keep the enabled dev server on loopback.
+- Never commit secrets, `.env`/`.env.local`, real customer records, or production payloads. Never prefix database credentials or simulator tokens with `NEXT_PUBLIC_`.
+- `.env.example` contains intentionally public, local-only PostgreSQL credentials. Never reuse them in production.
 
 ## Operations
 
+Ctrl+C each of the three processes separately. The worker attempts graceful shutdown. Persisted records/jobs survive process restarts.
+
 ```bash
-npm run db:stop   # Stop PostgreSQL, retaining its named volume
-npm run db:up     # Start it again
+npm run db:stop   # retains the named Docker volume
+npm run db:up
 ```
 
-`docker compose down` also retains the named volume unless told otherwise. **Do not use `docker compose down -v` unless you intend to permanently delete the local database volume.** There is no routine reset command in this increment.
+**Do not use `docker compose down -v` unless you intend to delete the database volume.** There is no routine reset step in this patch workflow.
 
-Use `npm run db:generate` only when changing the schema. Review and commit generated SQL before running `npm run db:migrate`. Do not edit a migration after it has been shared/applied, and don't replace tracked migrations with `drizzle-kit push`.
+Use `db:generate` only when developing a new application schema migration. Review and commit generated SQL; don't edit previously applied migrations or replace tracked migration history with `drizzle-kit push`.
 
-The dev server binds to all interfaces for preview compatibility. For local-only UI access, run `npm run dev -- --hostname 127.0.0.1`.
-
-## Security and public-repository hygiene
-
-Do not commit real customer data, request logs, credentials, or copied production payloads. Never expose `DATABASE_URL` through a `NEXT_PUBLIC_` variable. Do not put real data into this unauthenticated demonstration or publicly deploy database mode before adding authentication and store-level authorization. The synthetic-only fixture preview can remain publicly demonstrable.
-
-Read [the product brief](docs/PROJECT.md), [the persistence design](docs/PERSISTENCE.md), and [the patch workflow](docs/PATCH-WORKFLOW.md).
+Read [the execution guide](docs/EXECUTION.md), [the earlier persistence design](docs/PERSISTENCE.md), [the product brief](docs/PROJECT.md), and [the sequential patch workflow](docs/PATCH-WORKFLOW.md).
 
 ## License
 
