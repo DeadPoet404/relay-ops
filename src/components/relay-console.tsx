@@ -290,7 +290,7 @@ export function RelayConsole({ data: initialData }: { data: ConsoleData }) {
               </strong>{" "}
               Synthetic data only. No live customer orders.
             </span>
-            <span className="banner-version">GUIDED DEMO / 006</span>
+            <span className="banner-version">PORTFOLIO / 012</span>
           </div>
           {view === "exceptions" && (
             <>
@@ -730,7 +730,7 @@ export function RelayConsole({ data: initialData }: { data: ConsoleData }) {
             <span className="about-mark">
               <ShieldCheck size={25} />
             </span>
-            <div className="eyebrow">RELAY · INCREMENT 006</div>
+            <div className="eyebrow">RELAY · PORTFOLIO 012</div>
             <Dialog.Title>
               A little clarity between
               <br />
