@@ -23,7 +23,8 @@
     "worker": "tsx scripts/worker.ts",
     "demo:configure": "tsx scripts/demo-configure.ts",
     "demo:dev": "next dev --hostname 127.0.0.1 --port 3000",
-    "test:storefront:browser": "node scripts/check-storefront.mjs"
+    "test:storefront:browser": "node scripts/check-storefront.mjs",
+    "test:guided:browser": "node scripts/check-guided-demo.mjs"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.15",

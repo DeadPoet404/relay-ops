@@ -2062,3 +2062,14 @@ h1 {
     gap: 6px;
   }
 }
+
+/* Keep off-screen skip links clipped even in full-page captures. They remain
+   keyboard-focusable and recover their full size as soon as focused. */
+.skip-link:not(:focus) {
+  clip-path: inset(100%);
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+}

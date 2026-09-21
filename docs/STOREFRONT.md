@@ -1,5 +1,7 @@
 # Increment 005 — a connected Northline storefront
 
+> Checkout architecture remains current. Increment 006 adds the simpler `/demo` entry and direct order evidence links. Current counts are 65 unit / 54 integration tests; see [GUIDED-DEMO.md](GUIDED-DEMO.md).
+
 ## What this demonstrates
 
 **Shop → demo checkout → durable order/job → simulated warehouse → Relay recovery → customer-facing acknowledgement.**
@@ -33,7 +35,7 @@ Start the existing simulator, worker, and development web app in separate termin
 2. Open Northline, inspect the Ridge Daypack, add it to your bag, and continue to demo checkout.
 3. Confirm the no-charge checkbox and choose **Place demo order**. No customer/card entry is available or necessary.
 4. The confirmation page shows an `NL-...` order number. It may show “Confirming with warehouse” before becoming “Warehouse acknowledged.” Fast recovery can complete before the first browser poll.
-5. Open Relay, choose **Demo lab**, and expand that same `NL-...` order in Recent runs.
+5. On the confirmation page, choose **See how Relay handled this order** to open its exact persisted evidence (added in 006). The existing Demo lab latest-ten list is also available.
 6. Confirm **1 submission**, **1 lookup**, and **Original fulfillment recovered**. Look at the audit rather than equating a completed queue job with successful fulfillment.
 7. Return to the customer page: warehouse acknowledgement is visible, with an explicit explanation that it is not packing, shipment, or delivery.
 

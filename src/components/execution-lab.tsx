@@ -21,6 +21,8 @@ import {
   type LabRun,
   type Scenario,
 } from "@/lab/contracts";
+import Link from "next/link";
+import { runPath } from "@/demo/journey";
 import type { ConsoleData } from "@/lib/console-data";
 
 const cards: {
@@ -405,6 +407,12 @@ export function ExecutionLab({
               </button>
               {expanded === run.id && (
                 <div className="lab-run-detail">
+                  <Link
+                    className="button button-secondary"
+                    href={runPath(run.id)}
+                  >
+                    Explain this order’s result <ArrowRight size={14} />
+                  </Link>
                   <div className="lab-run-facts">
                     <span>
                       Submission job:{" "}

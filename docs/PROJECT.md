@@ -1,6 +1,6 @@
 # Relay — project brief
 
-> **Current implementation: increment 005.** A fictional Northline storefront now feeds real persisted demo purchases into Relay’s existing worker and recovery system. This is a portfolio demonstration of integration engineering, not a production commerce platform or an enterprise OMS replacement. See [STOREFRONT.md](STOREFRONT.md).
+> **Current implementation: increment 006.** A fictional Northline storefront now feeds real persisted demo purchases into Relay’s existing worker and recovery system. This is a portfolio demonstration of integration engineering, not a production commerce platform or an enterprise OMS replacement. A guided flow now connects the purchase directly to its evidence-based result. See [GUIDED-DEMO.md](GUIDED-DEMO.md).
 
 ## Product and audience
 
@@ -106,9 +106,13 @@ A polished fictional everyday-carry storefront, catalog-priced cart, no-charge c
 
 Production authentication, Shopify ingestion, and live-payment integration are deferred rather than prerequisites for a convincing local portfolio demonstration.
 
-### 006 — Public evidence
+### 006 — Guided demonstration and evidence (shipped)
 
-Reproducible scenario script, architecture diagram, engineering tradeoff write-up, and a short walkthrough. Publish implementation/test evidence rather than invented business results. Clearly distinguish prototype, simulated integration, development-store validation, and any later production use.
+A clear starting page, plain-language scenario selection, direct exact-order result links, evidence-derived summaries, expandable audit, pending-checkout preservation, and explicit working-versus-simulated boundaries. Browser and database checks verify the flow and old-run lookup. Includes a recording outline, not a claimed finished video or public deployment.
+
+### Next — Portfolio presentation
+
+Record the walkthrough, assemble a concise case study and architecture explanation, and publish a browsing-only preview. A public write-enabled demo is a separate isolation/abuse-control task. Publish measured implementation/test evidence rather than invented business outcomes.
 
 ## Explicit non-goals
 

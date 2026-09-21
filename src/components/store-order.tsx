@@ -10,6 +10,7 @@ import {
   TriangleAlert,
 } from "lucide-react";
 import { money } from "@/store/catalog";
+import { runPath } from "@/demo/journey";
 import type { StoreOrder } from "@/store/cart";
 const copy = {
   placed: {
@@ -195,14 +196,14 @@ export function StoreOrderView({
             </div>
           </div>
           <div className="nl-status-actions">
-            <Link href="/" className="nl-primary">
-              Follow this order in Relay <ArrowRight size={17} />
+            <Link href={runPath(id)} className="nl-primary">
+              See how Relay handled this order <ArrowRight size={17} />
             </Link>
             <Link href="/store">Back to the collection</Link>
           </div>
           <p className="nl-fine-print">
-            Find {order.number} under Demo lab → Recent runs in Relay. Only the
-            latest 10 runs appear there.
+            Opens this exact order’s saved result and audit trail. No searching
+            or copying order numbers required.
           </p>
         </>
       )}

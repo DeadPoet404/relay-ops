@@ -108,3 +108,16 @@ npm run queue:init
 This patch contains Git binary patches for locally served, AI-generated WebP imagery. Use `git am`, not copy/paste or `git apply`. Migration `0003_connected_storefront.sql` adds a purchase snapshot table without rewriting old data. No reseed or database reset is required.
 
 Restart the local services, open `/presenter`, then `/store`. Existing console functionality remains at `/`. Follow [STOREFRONT.md](STOREFRONT.md). Verify 49 unit tests, 49 integration tests, lint, types, and production build before pushing. The optional browser check creates six persisted demo purchases; it does not clear the app database.
+
+## Increment 006
+
+Apply `006-relay-guided-demo.patch` over published 005 (`79a7355`), whose source matches local `06d1423`. Stop the web app, worker, and simulator first:
+
+```bash
+git am "$HOME/Downloads/006-relay-guided-demo.patch"
+npm ci
+```
+
+There are **no new migrations or dependencies**. Keep your database, queues, seed/history, and environment files. No migration, queue reset, reseed, or data reset is needed. Restart the three existing services and begin at `/demo` instead of manually moving between presenter/store/console tabs.
+
+The result link reads one exact order independently of the latest-ten list. It adds no submission/retry actions. Verify lint, types, 65 unit tests, 54 integration tests, and production build before pushing. Optional guided browser checks create three synthetic purchases; see [GUIDED-DEMO.md](GUIDED-DEMO.md).

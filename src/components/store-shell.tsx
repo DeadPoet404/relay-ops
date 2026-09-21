@@ -2,6 +2,8 @@
 import { createContext, useContext, useEffect, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
+import { usePathname } from "next/navigation";
+import { guidedKey } from "@/demo/browser";
 import * as Dialog from "@radix-ui/react-dialog";
 import {
   ArrowRight,
@@ -27,6 +29,8 @@ export function useCart() {
   return value;
 }
 export function StoreShell({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname();
+  const [guided, setGuided] = useState(false);
   const [cart, setCart] = useState<Cart>([]);
   const [ready, setReady] = useState(false);
   const [open, setOpen] = useState(false);
@@ -37,6 +41,9 @@ export function StoreShell({ children }: { children: React.ReactNode }) {
           JSON.parse(localStorage.getItem("northline.cart") ?? "[]"),
         );
         if (stored.success) setCart(stored.data);
+      } catch {}
+      try {
+        setGuided(sessionStorage.getItem(guidedKey) === "true");
       } catch {}
       setReady(true);
     }, 0);
@@ -201,6 +208,25 @@ export function StoreShell({ children }: { children: React.ReactNode }) {
             </Dialog.Portal>
           </Dialog.Root>
         </header>
+        {guided && (
+          <nav className="nl-guided-bar" aria-label="Guided demo progress">
+            <Link href="/demo/start">✓ Choose a problem</Link>
+            <span
+              aria-current={
+                pathname.startsWith("/store/orders/") ? undefined : "step"
+              }
+            >
+              2 · Shop & check out
+            </span>
+            <span
+              aria-current={
+                pathname.startsWith("/store/orders/") ? "step" : undefined
+              }
+            >
+              3 · See your order’s result
+            </span>
+          </nav>
+        )}
         <main id="store-main">{children}</main>
         <footer className="nl-footer">
           <div>
@@ -211,7 +237,7 @@ export function StoreShell({ children }: { children: React.ReactNode }) {
           </div>
           <div className="nl-footer-links">
             <Link href="/">Relay console ↗</Link>
-            <Link href="/presenter">Presenter controls ↗</Link>
+            <Link href="/demo">Try the guided demo ↗</Link>
           </div>
           <div className="nl-footer-bottom">
             <span>Northline Supply · A fictional merchant by Relay</span>

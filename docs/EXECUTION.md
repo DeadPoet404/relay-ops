@@ -1,6 +1,6 @@
 # Increment 004 — safe recovery and reconciliation
 
-> Recovery architecture remains current. Increment 005 adds a connected storefront and raises the suite to 49 unit / 49 integration tests. See [STOREFRONT.md](STOREFRONT.md) for the current presentation and upgrade guide.
+> Recovery architecture remains current. Increments 005–006 add a connected storefront and guided demonstration. The current suite has 65 unit / 54 integration tests. See [GUIDED-DEMO.md](GUIDED-DEMO.md) for the current presentation and upgrade guide.
 
 Relay is a **local synthetic execution lab**, not a live commerce integration. A paid fictional order goes through a durable submission claim, authenticated HTTP simulator, recorded evidence, and—where permitted—a durable recovery action. There is no real Shopify connection, shipment, refund, cancellation, or production write access.
 

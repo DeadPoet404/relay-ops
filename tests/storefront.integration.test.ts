@@ -6,6 +6,7 @@ import { createDatabase } from "../src/db/client";
 import { seedDemo } from "../src/db/seed";
 import {
   labRuns,
+  stores,
   orders,
   storefrontPurchases,
   submissionAttempts,
@@ -25,7 +26,7 @@ import { createSimulator } from "../src/simulator/server";
 import { submitToSimulator, lookupSimulator } from "../src/simulator/connector";
 import { processRun } from "../src/worker/process-run";
 import { processRecovery } from "../src/recovery/process";
-import { readRuns } from "../src/lab/read-runs";
+import { readRuns, readRun } from "../src/lab/read-runs";
 import { testDatabaseUrl } from "./test-database";
 const url = testDatabaseUrl();
 const resources = createDatabase(url);
@@ -230,5 +231,82 @@ describe.sequential("connected storefront", () => {
     );
     expect(await db.select().from(storefrontPurchases)).toHaveLength(1);
     expect(await boss.findJobs(SUBMISSION_QUEUE)).toHaveLength(1);
+  });
+  it("opens an exact order even after it leaves the latest-ten list", async () => {
+    const original = await createRun(
+      db,
+      boss,
+      { requestId: crypto.randomUUID(), scenario: "accepted" },
+      cart,
+    );
+    for (let i = 0; i < 11; i++)
+      await createRun(db, boss, {
+        requestId: crypto.randomUUID(),
+        scenario: "accepted",
+      });
+    expect((await readRuns(db)).some((run) => run.id === original.runId)).toBe(
+      false,
+    );
+    expect(await readRun(db, original.runId)).toMatchObject({
+      id: original.runId,
+      status: "queued",
+      attemptCount: 0,
+      recoveredByLookup: false,
+    });
+    expect(await boss.findJobs(SUBMISSION_QUEUE)).toHaveLength(12);
+  });
+  it("exact reads do not mutate, submit, or append audit events", async () => {
+    const { runId } = await createRun(
+      db,
+      boss,
+      { requestId: crypto.randomUUID(), scenario: "accepted" },
+      cart,
+    );
+    const first = await readRun(db, runId);
+    expect(await readRun(db, runId)).toEqual(first);
+    expect(await db.select().from(submissionAttempts)).toHaveLength(0);
+    expect(await db.select().from(simulatorRequests)).toHaveLength(0);
+    expect(await boss.findJobs(SUBMISSION_QUEUE)).toHaveLength(1);
+  });
+  it("returns no evidence for absent or differently scoped runs", async () => {
+    expect(await readRun(db, crypto.randomUUID())).toBeNull();
+    const { runId } = await createRun(db, boss, {
+      requestId: crypto.randomUUID(),
+      scenario: "accepted",
+    });
+    const [other] = await db
+      .insert(stores)
+      .values({
+        slug: "other-demo",
+        name: "Other synthetic store",
+        datasetVersion: "test",
+        snapshotAt: new Date(),
+      })
+      .returning();
+    await db
+      .update(labRuns)
+      .set({ storeId: other.id })
+      .where(eq(labRuns.id, runId));
+    expect(await readRun(db, runId)).toBeNull();
+  });
+  it("rejects malformed exact identities", async () => {
+    await expect(readRun(db, "not-a-uuid")).rejects.toThrow();
+  });
+  it("projects a saved lookup recovery only after the audit confirms it", async () => {
+    const { runId } = await createRun(
+      db,
+      boss,
+      { requestId: crypto.randomUUID(), scenario: "accepted_timeout" },
+      cart,
+    );
+    await processRun(resources, runId, connectors.submit, boss);
+    expect((await readRun(db, runId))!.recoveredByLookup).toBe(false);
+    await step(runId);
+    expect(await readRun(db, runId)).toMatchObject({
+      status: "accepted",
+      recoveredByLookup: true,
+      attemptCount: 1,
+      lookupCount: 1,
+    });
   });
 });

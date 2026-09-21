@@ -64,7 +64,11 @@ export function StorePresenter({ enabled }: { enabled: boolean }) {
         <Link href="/" className="nl-back">
           ← Relay console
         </Link>
-        <span>LOCAL PRESENTER / 005</span>
+        <span>ADVANCED PRESENTER / 006</span>
+      </div>
+      <div className="nl-alert">
+        New here? <Link href="/demo">Start the guided demo →</Link> It takes you
+        from a purchase directly to that order’s result.
       </div>
       <FlaskConical size={28} strokeWidth={1.4} />
       <p className="nl-eyebrow">THE STORY BEHIND THE STOREFRONT</p>
@@ -121,8 +125,8 @@ export function StorePresenter({ enabled }: { enabled: boolean }) {
           fictional customer, and confirm no payment will be made.
         </li>
         <li>
-          <strong>Follow the evidence.</strong> Open Relay’s Demo lab and expand
-          the matching NL order. Inspect counts and its audit timeline.
+          <strong>Follow the evidence.</strong> On the confirmation page, choose
+          “See how Relay handled this order” to open its saved result directly.
         </li>
       </ol>
       <p className="nl-fine-print">

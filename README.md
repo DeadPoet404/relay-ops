@@ -4,7 +4,7 @@
 
 Relay explores the systems between payment and fulfillment: **which orders are stuck, what evidence do we have, and what is safe to do next?**
 
-**Current increment: 005 — connected Northline storefront.** The console, PostgreSQL persistence, durable queue, background worker, and HTTP warehouse simulator work together. All customers, paid orders, and warehouse records remain fictional. There is no Shopify integration, real shipment creation, production authentication, address correction, or permission to force a submission. Bounded retries and reference lookups operate only against the local simulator.
+**Current increment: 006 — guided order-recovery demonstration.** The console, PostgreSQL persistence, durable queue, background worker, and HTTP warehouse simulator work together. All customers, paid orders, and warehouse records remain fictional. There is no Shopify integration, real shipment creation, production authentication, address correction, or permission to force a submission. Bounded retries and reference lookups operate only against the local simulator.
 
 ## Local setup
 
@@ -45,11 +45,13 @@ Open **http://localhost:3000**, then Demo lab. Use that exact origin unless you 
 
 ## A purchase you can follow
 
-Open **http://localhost:3000/presenter**, choose **Accepted, response lost**, then visit **/store**. Northline Supply is a polished fictional everyday-carry store: product details, category filters, a persistent bag, no-charge checkout, and a persisted order-status page.
+Start at **http://localhost:3000/demo**. Click **Try the demo**, choose **The warehouse reply goes missing**, then **Shop this demo**. Northline has product details, a persistent bag, no-charge checkout, and an order-status page.
 
-Shop → demo checkout → durable order/job → simulated warehouse → Relay recovery. Open Relay's Demo lab and match the `NL-...` order number to see the same purchase recover by reference lookup, not resubmission. Payment/customer details are fictional and nothing ships. The status page confirms warehouse acknowledgement, not delivery.
+After purchase, click **See how Relay handled this order**. It opens that exact order's persisted result and audit trail—no copying an order number or searching the latest-ten list. The summary reports saved evidence rather than assuming the selected scenario succeeded.
 
-Production/fixture previews allow browsing but disable purchases and order-record reads. Keep enabled execution local. See [the storefront guide](docs/STOREFRONT.md) for the connected walkthrough, API boundaries, and an optional reproducible Playwright check.
+Shop → demo checkout → durable order/job → simulated warehouse → Relay recovery. Payment/customer details are fictional, nothing ships, and warehouse acknowledgement is not delivery.
+
+Production/fixture previews allow browsing but disable purchases and order-record reads. Keep enabled execution local. See [the guided demo](docs/GUIDED-DEMO.md) for the simplest walkthrough, evidence semantics, optional browser checks, and a recording outline. The [storefront guide](docs/STOREFRONT.md) describes checkout implementation.
 
 ## What to demonstrate
 
@@ -99,8 +101,8 @@ npm run test:db
 npm run build
 ```
 
-- **49 unit tests**: fixtures, filtering, display, domain policy, configuration, origin guards, and bounded request parsing.
-- **49 database/integration tests**: persistence, transactional rollback, duplicate/concurrent requests, all simulator outcomes, queue redelivery, bounded retries/lookups, stale delivery fencing, atomic recovery scheduling, and real worker stop/restart/SIGKILL cases.
+- **65 unit tests**: fixtures, filtering, display, domain policy, configuration, origin guards, and bounded request parsing.
+- **54 database/integration tests**: persistence, transactional rollback, duplicate/concurrent requests, all simulator outcomes, queue redelivery, bounded retries/lookups, stale delivery fencing, atomic recovery scheduling, and real worker stop/restart/SIGKILL cases.
 - GitHub Actions is configured to run the same core checks with PostgreSQL. Check the actual Actions result after pushing; configuration is not proof a remote run succeeded.
 
 **The integration suite truncates application/simulator tables and deletes queue jobs in its dedicated test database.** `TEST_DATABASE_URL` must point to a disposable loopback database whose name ends in `_test`, different from the application's database. Never use a database containing valuable data. Do not run multiple test suites against the same test database concurrently.
@@ -124,6 +126,7 @@ src/domain/       Pure, validated fulfillment state transitions
 src/db/           Schema, migrations adapter, seed, reads, atomic state/audit writes
 src/lab/          Local execution contracts, request policy, run creation/projection
 src/store/        Catalog, strict cart pricing, purchase/status projection
+src/demo/         Guided browser continuity and evidence-based result wording
 src/queue/        pg-boss configuration and initialization
 src/worker/       Durable claim and submission processing
 src/recovery/     Bounded policy, transactional scheduling, lookup and scan handlers
@@ -141,7 +144,7 @@ The worker communicates with the simulator over authenticated loopback HTTP. The
 - One fictional store, paid demo orders, USD, one fulfillment intent/exception per order.
 - Original seed examples retain their original snapshot timestamps. New runtime events advance observation time; older examples can show larger ages.
 - A run is capped at three claimed submissions and three claimed lookups. Unknown outcomes never authorize a POST; even lookup “not found” escalates rather than blindly resubmitting.
-- The local lab is capped at 100 total runs and displays the latest 10. This is a demo bound, not a production rate limiter.
+- The local lab is capped at 100 total runs; its list displays the latest 10, while exact result links can read older lab runs. This is a demo bound, not a production rate limiter.
 - Audit row updates/deletes are rejected by a PostgreSQL trigger, but privileged owners can bypass it. It is not a tamper-proof ledger.
 - Request/queue deduplication and local concurrency checks are **not** a claim of exactly-once external execution.
 - Host/Origin validation and development flags are local browser safeguards, not production authentication. Keep the enabled dev server on loopback.
@@ -161,7 +164,7 @@ npm run db:up
 
 Use `db:generate` only when developing a new application schema migration. Review and commit generated SQL; don't edit previously applied migrations or replace tracked migration history with `drizzle-kit push`.
 
-Read [the storefront guide](docs/STOREFRONT.md), [the execution guide](docs/EXECUTION.md), [the earlier persistence design](docs/PERSISTENCE.md), [the product brief](docs/PROJECT.md), and [the sequential patch workflow](docs/PATCH-WORKFLOW.md).
+Read [the guided-demo guide](docs/GUIDED-DEMO.md), [the storefront guide](docs/STOREFRONT.md), [the execution guide](docs/EXECUTION.md), [the earlier persistence design](docs/PERSISTENCE.md), [the product brief](docs/PROJECT.md), and [the sequential patch workflow](docs/PATCH-WORKFLOW.md).
 
 ## License
 

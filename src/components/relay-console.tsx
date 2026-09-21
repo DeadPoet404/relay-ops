@@ -23,6 +23,7 @@ import {
   LoaderCircle,
   Menu,
   PackageCheck,
+  Play,
   Search,
   ShieldCheck,
   TriangleAlert,
@@ -173,8 +174,12 @@ export function RelayConsole({ data: initialData }: { data: ConsoleData }) {
         >
           <FlaskConical size={18} strokeWidth={1.7} />
           <span>Demo lab</span>
-          <span className="tiny-label">05</span>
+          <span className="tiny-label">06</span>
         </button>
+        <a href="/demo" className="nav-item">
+          <Play size={18} strokeWidth={1.7} />
+          <span>Try the guided demo</span>
+        </a>
         <a href="/store" className="nav-item">
           <ExternalLink size={18} strokeWidth={1.7} />
           <span>Northline storefront</span>
@@ -285,7 +290,7 @@ export function RelayConsole({ data: initialData }: { data: ConsoleData }) {
               </strong>{" "}
               Synthetic data only. No live customer orders.
             </span>
-            <span className="banner-version">STOREFRONT / 005</span>
+            <span className="banner-version">GUIDED DEMO / 006</span>
           </div>
           {view === "exceptions" && (
             <>
@@ -725,7 +730,7 @@ export function RelayConsole({ data: initialData }: { data: ConsoleData }) {
             <span className="about-mark">
               <ShieldCheck size={25} />
             </span>
-            <div className="eyebrow">RELAY · INCREMENT 005</div>
+            <div className="eyebrow">RELAY · INCREMENT 006</div>
             <Dialog.Title>
               A little clarity between
               <br />

@@ -1,4 +1,5 @@
-import { desc, eq, inArray, asc } from "drizzle-orm";
+import { z } from "zod";
+import { and, desc, eq, inArray, asc } from "drizzle-orm";
 import type { Database } from "../db/client";
 import {
   auditEvents,
@@ -11,7 +12,7 @@ import {
 import { DEMO_SLUG } from "../db/seed";
 import type { LabRun } from "./contracts";
 
-export async function readRuns(db: Database): Promise<LabRun[]> {
+async function readRows(db: Database, id?: string): Promise<LabRun[]> {
   return db.transaction(
     async (tx) => {
       const rows = await tx
@@ -27,9 +28,11 @@ export async function readRuns(db: Database): Promise<LabRun[]> {
           eq(fulfillmentIntents.id, labRuns.intentId),
         )
         .innerJoin(orders, eq(orders.id, fulfillmentIntents.orderId))
-        .where(eq(stores.slug, DEMO_SLUG))
+        .where(
+          and(eq(stores.slug, DEMO_SLUG), id ? eq(labRuns.id, id) : undefined),
+        )
         .orderBy(desc(labRuns.createdAt))
-        .limit(10);
+        .limit(id ? 1 : 10);
       if (!rows.length) return [];
       const history = await tx
         .select()
@@ -52,6 +55,9 @@ export async function readRuns(db: Database): Promise<LabRun[]> {
         .orderBy(asc(auditEvents.sequence));
       return rows.map(({ run, intent, order }) => ({
         id: run.id,
+        recoveredByLookup: events.some(
+          (e) => e.intentId === intent.id && e.type === "reconciled",
+        ),
         orderNumber: order.orderNumber,
         scenario: run.scenario,
         status: run.status,
@@ -79,4 +85,16 @@ export async function readRuns(db: Database): Promise<LabRun[]> {
     },
     { isolationLevel: "repeatable read", accessMode: "read only" },
   );
+}
+
+export function readRuns(db: Database) {
+  return readRows(db);
+}
+/** Direct, demo-store-scoped read. Does not depend on the latest-ten window. */
+export async function readRun(
+  db: Database,
+  id: string,
+): Promise<LabRun | null> {
+  z.uuid().parse(id);
+  return (await readRows(db, id))[0] ?? null;
 }

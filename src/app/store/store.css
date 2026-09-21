@@ -1525,3 +1525,27 @@
     scroll-behavior: auto !important;
   }
 }
+
+/* A light progress strip only during an explicitly started guided session. */
+.nl-guided-bar {
+  display: flex;
+  justify-content: center;
+  gap: 30px;
+  padding: 13px 5%;
+  background: #eef0e8;
+  color: #6d736c;
+  font-size: 11px;
+  border-bottom: 1px solid #dedfd7;
+}
+.nl-guided-bar [aria-current="step"] {
+  color: #26392f;
+  font-weight: 600;
+}
+@media (max-width: 640px) {
+  .nl-guided-bar {
+    gap: 13px;
+    padding: 12px 5%;
+    font-size: 9px;
+    flex-wrap: wrap;
+  }
+}
