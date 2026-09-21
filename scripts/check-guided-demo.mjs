@@ -177,7 +177,7 @@ try {
       .click();
     if (scenario === "accepted_timeout") {
       await expect(
-        page.getByText("Original fulfillment recovered", { exact: true }),
+        page.getByText("Original fulfillment recovered", { exact: true }).first(),
       ).toBeVisible();
       await page.screenshot({
         path: "test-results/guided/result.png",

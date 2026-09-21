@@ -1,5 +1,6 @@
 "use client";
 import { createContext, useContext, useEffect, useState } from "react";
+// useState already imported for AddToBag micro-interaction
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
@@ -12,6 +13,7 @@ import {
   ShoppingBag,
   X,
   Mountain,
+  Check,
 } from "lucide-react";
 import { cartSchema, type Cart } from "@/store/cart";
 import { money, productById } from "@/store/catalog";
@@ -34,6 +36,7 @@ export function StoreShell({ children }: { children: React.ReactNode }) {
   const [cart, setCart] = useState<Cart>([]);
   const [ready, setReady] = useState(false);
   const [open, setOpen] = useState(false);
+  const [bump, setBump] = useState(false);
   useEffect(() => {
     const timer = setTimeout(() => {
       try {
@@ -50,6 +53,10 @@ export function StoreShell({ children }: { children: React.ReactNode }) {
     return () => clearTimeout(timer);
   }, []);
   function change(id: string, n: number) {
+    if (n > 0) {
+      setBump(true);
+      setTimeout(() => setBump(false), 320);
+    }
     if (!ready || !productById(id)) return;
     setCart((current) => {
       const next = [
@@ -105,7 +112,7 @@ export function StoreShell({ children }: { children: React.ReactNode }) {
           <Dialog.Root open={open} onOpenChange={setOpen}>
             <Dialog.Trigger asChild>
               <button
-                className="nl-bag"
+                className={`nl-bag ${bump ? "nl-bag-bump" : ""}`}
                 aria-label={`Open bag, ${count} items`}
               >
                 <ShoppingBag size={19} />
@@ -252,9 +259,20 @@ export function StoreShell({ children }: { children: React.ReactNode }) {
 }
 export function AddToBag({ id }: { id: string }) {
   const { add, ready } = useCart();
+  const [added, setAdded] = useState(false);
   return (
-    <button className="nl-primary" disabled={!ready} onClick={() => add(id)}>
-      Add to bag <Plus size={17} />
+    <button
+      className={`nl-primary ${added ? "nl-added" : ""}`}
+      disabled={!ready}
+      onClick={() => {
+        add(id);
+        setAdded(true);
+        setTimeout(() => setAdded(false), 900);
+      }}
+      style={{ transform: added ? "scale(0.97)" : "scale(1)", transition: "transform 0.15s ease, background 0.15s ease" }}
+    >
+      {added ? <>Added ✓ <Check size={17} /></> : <>Add to bag <Plus size={17} /></>}
     </button>
   );
 }
+
