@@ -1550,20 +1550,19 @@
   }
 }
 
-/* 008 micro-interactions */
+/* micro-interactions - calm, no bounce */
 .nl-bag {
-  transition: transform 0.18s cubic-bezier(.2,.8,.2,1);
+  transition: transform 0.18s ease;
 }
 .nl-bag:active {
-  transform: scale(0.93);
+  transform: scale(0.96);
 }
 .nl-bag-bump {
-  animation: nl-bump 0.32s cubic-bezier(.34,1.56,.64,1);
+  animation: nl-bump 0.28s ease;
 }
 @keyframes nl-bump {
   0% { transform: scale(1); }
-  30% { transform: scale(1.18); }
-  60% { transform: scale(0.96); }
+  40% { transform: scale(1.08); }
   100% { transform: scale(1); }
 }
 .nl-primary {

@@ -14,12 +14,12 @@
   align-items: center;
   gap: 12px;
   padding: 16px 18px 14px;
-  background: linear-gradient(180deg, #fff, #fbfbfe);
+  background: #ffffff;
   border-bottom: 1px solid #eef0f4;
 }
 .ge-live-dot {
-  width: 10px;
-  height: 10px;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
   background: #c5c3e0;
   position: relative;
@@ -30,17 +30,17 @@
 }
 .ge-live-dot.live i {
   position: absolute;
-  inset: -6px;
+  inset: -5px;
   border-radius: 50%;
   border: 1px solid #6d65e055;
-  animation: ge-ping 1.6s cubic-bezier(0,0,.2,1) infinite;
+  animation: ge-ping 2.4s ease-out infinite;
 }
 .ge-live-dot.done {
   background: #4a7a3f;
 }
 @keyframes ge-ping {
-  0% { transform: scale(0.7); opacity: 1; }
-  100% { transform: scale(1.8); opacity: 0; }
+  0% { transform: scale(0.8); opacity: 0.7; }
+  100% { transform: scale(1.9); opacity: 0; }
 }
 .ge-header-text {
   flex: 1;
@@ -85,7 +85,7 @@
   border-color: #f1d7a8;
 }
 .ge-progress {
-  height: 3px;
+  height: 2px;
   background: #f0f1f5;
   position: relative;
   overflow: hidden;
@@ -93,23 +93,12 @@
 .ge-progress i {
   position: absolute;
   left: 0; top: 0; bottom: 0;
-  background: linear-gradient(90deg, #6d65e0, #a59cf0);
-  transition: width 0.6s cubic-bezier(.2,.8,.2,1);
-  border-radius: 0 3px 3px 0;
+  background: #6d65e0;
+  transition: width 0.6s ease;
+  border-radius: 0 2px 2px 0;
 }
 .ge-progress i.review {
-  background: linear-gradient(90deg, #d6a24a, #e8c27a);
-}
-.ge-progress i::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(90deg, transparent, #ffffff77, transparent);
-  animation: ge-shimmer 1.6s infinite;
-}
-@keyframes ge-shimmer {
-  0% { transform: translateX(-100%); }
-  100% { transform: translateX(200%); }
+  background: #d6a24a;
 }
 .ge-stages {
   padding: 8px 18px 10px;
@@ -119,21 +108,13 @@
   display: grid;
   grid-template-columns: 36px 1fr;
   gap: 12px;
-  padding: 12px 0;
+  padding: 11px 0;
   opacity: 0;
-  transform: translateY(6px);
-  animation: ge-in 0.38s cubic-bezier(.2,.8,.2,1) forwards;
-}
-.ge-stage.ge-enter {
-  animation: ge-pop 0.42s cubic-bezier(.34,1.56,.64,1) forwards;
+  transform: translateY(4px);
+  animation: ge-in 0.32s ease forwards;
 }
 @keyframes ge-in {
   to { opacity: 1; transform: translateY(0); }
-}
-@keyframes ge-pop {
-  0% { opacity: 0; transform: translateY(8px) scale(0.98); }
-  60% { opacity: 1; transform: translateY(-1px) scale(1.01); }
-  100% { opacity: 1; transform: translateY(0) scale(1); }
 }
 .ge-track {
   display: flex;
@@ -142,32 +123,25 @@
   gap: 6px;
 }
 .ge-dot {
-  width: 28px;
-  height: 28px;
+  width: 26px;
+  height: 26px;
   border-radius: 50%;
   display: grid;
   place-items: center;
-  border: 2px solid #e5e7ef;
+  border: 1.5px solid #e5e7ef;
   background: white;
   flex-shrink: 0;
-  transition: all 0.28s cubic-bezier(.2,.8,.2,1);
+  transition: background 0.25s ease, border-color 0.25s ease, color 0.25s ease;
 }
 .ge-dot.done {
   background: #5750d5;
   border-color: #5750d5;
   color: white;
-  animation: ge-check 0.4s cubic-bezier(.34,1.56,.64,1);
-}
-@keyframes ge-check {
-  0% { transform: scale(0.7); }
-  50% { transform: scale(1.18); }
-  100% { transform: scale(1); }
 }
 .ge-dot.active {
   border-color: #8e87e8;
   background: #f6f4ff;
   color: #5a52d6;
-  box-shadow: 0 0 0 4px #6d65e014;
 }
 .ge-dot.pending {
   background: #fbfbfc;
@@ -178,39 +152,29 @@
   border-color: #e5b86a;
   color: #8a5a1f;
 }
-.ge-dot.shimmer {
-  background: linear-gradient(90deg, #f0f1f5 25%, #e6e8f0 50%, #f0f1f5 75%);
-  background-size: 200% 100%;
-  animation: ge-shimmer-bg 1.2s infinite;
-  border-color: #eceef3;
-}
-@keyframes ge-shimmer-bg {
-  0% { background-position: 200% 0; }
-  100% { background-position: -200% 0; }
-}
 .ge-dot .spin {
-  animation: spin 0.9s linear infinite;
+  animation: spin 1s linear infinite;
 }
 @keyframes spin {
   to { transform: rotate(360deg); }
 }
 .ge-connector {
-  width: 2px;
+  width: 1.5px;
   flex: 1;
-  min-height: 18px;
+  min-height: 16px;
   background: #eceef3;
   border-radius: 2px;
-  transition: background 0.4s ease;
+  transition: background 0.3s ease;
 }
 .ge-connector.done {
   background: #c8c4e9;
 }
 .ge-connector.active {
-  background: linear-gradient(180deg, #a59cf0, #eceef3);
+  background: #a59cf0;
 }
 .ge-content {
   min-width: 0;
-  padding-top: 2px;
+  padding-top: 1px;
 }
 .ge-content strong {
   display: flex;
@@ -229,9 +193,9 @@
 .ge-content small {
   display: block;
   font-size: 11.5px;
-  line-height: 1.55;
+  line-height: 1.5;
   color: #5d6577;
-  margin-top: 4px;
+  margin-top: 3px;
 }
 .ge-content small.typing {
   color: #4a4fbf;
@@ -242,17 +206,18 @@
   margin-top: 6px;
 }
 .ge-typing i {
-  width: 4px;
-  height: 4px;
+  width: 3px;
+  height: 3px;
   border-radius: 50%;
   background: #8e87e8;
-  animation: ge-bounce 1.1s infinite;
+  animation: ge-bounce 1.4s ease-in-out infinite;
+  opacity: 0.7;
 }
-.ge-typing i:nth-child(2) { animation-delay: 0.15s; }
-.ge-typing i:nth-child(3) { animation-delay: 0.3s; }
+.ge-typing i:nth-child(2) { animation-delay: 0.18s; }
+.ge-typing i:nth-child(3) { animation-delay: 0.36s; }
 @keyframes ge-bounce {
-  0%, 80%, 100% { transform: translateY(0); opacity: 0.5; }
-  40% { transform: translateY(-4px); opacity: 1; }
+  0%, 80%, 100% { transform: translateY(0); }
+  40% { transform: translateY(-2px); }
 }
 .ge-line {
   height: 10px;
@@ -261,11 +226,6 @@
   margin: 4px 0;
 }
 .ge-line.short { width: 45% !important; }
-.ge-line.shimmer {
-  background: linear-gradient(90deg, #eef0f4 25%, #e3e6ef 50%, #eef0f4 75%);
-  background-size: 200% 100%;
-  animation: ge-shimmer-bg 1.2s infinite;
-}
 .ge-log {
   margin: 4px 18px 14px;
   background: #f8f7fb;
@@ -297,9 +257,6 @@
   font-size: 10.5px;
   line-height: 1.5;
   border-bottom: 1px solid #f0eef5;
-  opacity: 0;
-  transform: translateY(4px);
-  animation: ge-in 0.36s cubic-bezier(.2,.8,.2,1) forwards;
 }
 .ge-log-item:last-child { border-bottom: 0; }
 .ge-log-item time {
@@ -331,18 +288,8 @@
   background: #fbfbfe;
 }
 @media (prefers-reduced-motion: reduce) {
-  .ge-stage, .ge-dot, .ge-progress i, .ge-live-dot i, .ge-typing i, .ge-log-item {
+  .ge-stage, .ge-dot, .ge-progress i, .ge-live-dot i, .ge-typing i {
     animation: none !important;
     transition: none !important;
   }
-}
-
-.ge-stage.ge-active-pulse {
-  background: linear-gradient(90deg, #f6f4ff00, #f6f4ff 8%, #f6f4ff00);
-  border-radius: 8px;
-  animation: ge-active-bg 1.8s ease infinite;
-}
-@keyframes ge-active-bg {
-  0%,100% { background-position: 0% 0%; }
-  50% { background-position: 100% 0%; }
 }

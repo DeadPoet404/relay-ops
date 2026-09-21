@@ -6,79 +6,62 @@ import { deriveLiveJourney, type LiveJourney } from "@/demo/live-stages";
 import type { LabRun } from "@/lab/contracts";
 import "./guided-execution.css";
 
-function durationFor(key: string, index: number, isLast: boolean): number {
-  // Realistic, varied pacing per stage - feels like real system work
-  const base: Record<string, number> = {
-    recorded: 380,
-    submission: 1380,
-    checking: 1050,
-    final: 620,
-  };
-  const v = base[key] ?? 500 + index * 180;
-  // jitter ±120ms, last stage a bit quicker to resolve
-  const jitter = Math.floor(Math.random() * 240) - 120;
-  const lastBonus = isLast ? -80 : 0;
-  return Math.max(260, v + jitter + lastBonus);
-}
+// Calm, fixed pacing - no random jitter that causes glitchy replays
+const STAGE_DURATIONS: Record<string, number> = {
+  recorded: 420,
+  submission: 780,
+  checking: 720,
+  final: 420,
+};
 
 export function GuidedExecutionFlow({ run, compact = false }: { run: LabRun | null; compact?: boolean }) {
   const journey: LiveJourney | null = useMemo(() => (run ? deriveLiveJourney(run) : null), [run]);
   const [reveal, setReveal] = useState(1);
-  const [prevKeys, setPrevKeys] = useState<string>("");
-  const [progressHint, setProgressHint] = useState(12);
   const timersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const lastRunIdRef = useRef<string | null>(null);
 
   const stageKey = journey ? journey.stages.map(s => `${s.key}:${s.state}`).join("|") : "";
   const isLiveActive = journey ? journey.stages.some(s => s.state === "active") && !journey.isComplete : false;
 
-  // Realistic replay pacing - even completed orders animate like real work
+  // Only replay when runId changes, not on every poll - prevents repetitive glitch
   useEffect(() => {
-    timersRef.current.forEach(clearTimeout);
-    timersRef.current = [];
-    if (!journey) {
+    const runId = journey?.runId ?? null;
+    const isNewRun = runId !== lastRunIdRef.current;
+    if (isNewRun) {
+      lastRunIdRef.current = runId;
+      timersRef.current.forEach(clearTimeout);
+      timersRef.current = [];
       setReveal(1);
-      setProgressHint(12);
+    }
+
+    if (!journey) {
       return;
     }
 
-    // If journey is actively running (not replay), reveal based on actual done count + 1 active
     if (isLiveActive) {
       const done = journey.stages.filter(s => s.state === "done").length;
       const activeIdx = journey.stages.findIndex(s => s.state === "active");
-      const target = activeIdx >= 0 ? activeIdx + 1 : done;
-      setReveal(Math.max(1, target));
-      setProgressHint(journey.progress);
+      const target = activeIdx >= 0 ? activeIdx + 1 : Math.max(1, done);
+      setReveal(target);
       return;
     }
 
-    // Completed or pending replay: staged reveal with varied durations
-    setReveal(1);
-    setProgressHint(14);
+    // Completed replay: only if this is a new run, do staged reveal
+    if (!isNewRun) return;
+
     const total = journey.stages.length;
     let acc = 0;
-    for (let i = 1; i <= total; i++) {
+    for (let i = 2; i <= total; i++) {
       const key = journey.stages[i - 1]?.key ?? `s${i}`;
-      const dur = durationFor(key, i, i === total);
+      const dur = STAGE_DURATIONS[key] ?? 500;
       acc += dur;
-      const at = acc;
-      const prog = Math.round((i / total) * journey.progress);
       timersRef.current.push(
-        setTimeout(() => {
-          setReveal(i);
-          setProgressHint(prog);
-        }, at)
+        setTimeout(() => setReveal(i), acc)
       );
     }
     return () => timersRef.current.forEach(clearTimeout);
-  }, [stageKey, journey?.runId, isLiveActive, journey]);
-
-  useEffect(() => {
-    if (!journey) return;
-    const keys = journey.stages.filter(s => s.state !== "pending").map(s => s.key).join("|");
-    setPrevKeys((prev) => (prev ? prev : keys));
-    const t = setTimeout(() => setPrevKeys(keys), 140);
-    return () => clearTimeout(t);
-  }, [stageKey]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [journey?.runId, isLiveActive, stageKey]);
 
   if (!journey) {
     return (
@@ -87,28 +70,27 @@ export function GuidedExecutionFlow({ run, compact = false }: { run: LabRun | nu
           <span className="ge-live-dot"><i /></span>
           <div className="ge-header-text">
             <strong>Relay is preparing your order</strong>
-            <span className="ge-sub">You clicked — real DB transaction starting… validating, reserving</span>
+            <span className="ge-sub">Real DB transaction starting…</span>
           </div>
         </div>
-        <div className="ge-progress"><i style={{ width: `${progressHint}%`, transition: "width 0.6s ease" }} /></div>
+        <div className="ge-progress"><i style={{ width: "18%" }} /></div>
         <div className="ge-stages">
           {[1,2,3,4].map(i => (
-            <div key={i} className="ge-stage pending" style={{ animationDelay: `${i*110}ms` }}>
-              <div className="ge-track"><div className="ge-dot shimmer" /></div>
+            <div key={i} className="ge-stage pending">
+              <div className="ge-track"><div className="ge-dot pending" /></div>
               <div className="ge-content">
-                <div className="ge-line shimmer" style={{ width: `${58 + i*9}%` }} />
-                <div className="ge-line shimmer short" />
+                <div className="ge-line" style={{ width: `${58 + i*8}%`, opacity: 0.6 }} />
+                <div className="ge-line short" style={{ opacity: 0.4 }} />
               </div>
             </div>
           ))}
         </div>
-        <div className="ge-footnote">Real pacing: 6s queue + 2s handoff. This skeleton is the DB commit you just triggered.</div>
+        <div className="ge-footnote">Click triggers real work — DB commit + 6s queue + 2s handoff.</div>
       </div>
     );
   }
 
   const visibleStages = journey.stages.slice(0, reveal);
-  const displayProgress = isLiveActive ? journey.progress : progressHint;
 
   return (
     <div className={`ge-flow ${compact ? "ge-compact" : ""} ${journey.isComplete ? "ge-done" : "ge-live"}`}>
@@ -119,33 +101,31 @@ export function GuidedExecutionFlow({ run, compact = false }: { run: LabRun | nu
             {journey.isComplete ? (journey.needsReview ? "Needs review — intentional" : "Order confirmed — no repeat submission") : "Relay is working on your order"}
           </strong>
           <span className="ge-sub">
-            {journey.isPaced ? `Real pacing · ${journey.orderNumber} · live` : `${journey.orderNumber} · live`}
-            {journey.stages.find(s => s.state === "active") ? ` · ${journey.stages.find(s => s.state === "active")?.title} — ${journey.stages.find(s => s.state === "active")?.detail}` : ` · ${visibleStages.length}/${journey.stages.length} stages · ${displayProgress}%`}
+            {journey.orderNumber} · {visibleStages.length}/{journey.stages.length} stages
+            {journey.stages.find(s => s.state === "active") ? ` · ${journey.stages.find(s => s.state === "active")?.title}` : ""}
           </span>
         </div>
         <span className={`ge-pill ${journey.isComplete ? (journey.needsReview ? "review" : "done") : "running"}`}>
-          {journey.isComplete ? (journey.needsReview ? "Review" : "Done") : `${displayProgress}%`}
+          {journey.isComplete ? (journey.needsReview ? "Review" : "Done") : `${journey.progress}%`}
         </span>
       </div>
       <div className="ge-progress" aria-hidden>
-        <i style={{ width: `${displayProgress}%`, transition: "width 0.7s cubic-bezier(0.25,0.8,0.25,1)" }} className={journey.needsReview ? "review" : ""} />
+        <i style={{ width: `${journey.progress}%` }} className={journey.needsReview ? "review" : ""} />
       </div>
 
       <div className="ge-stages">
-        {visibleStages.map((st, idx) => {
-          const isNew = prevKeys ? !prevKeys.includes(st.key) && st.state !== "pending" : idx === visibleStages.length - 1;
+        {visibleStages.map((st) => {
           const isActive = st.state === "active";
           return (
             <div
               key={st.key}
-              className={`ge-stage ${st.state} ${isNew ? "ge-enter" : ""} ${isActive ? "ge-active-pulse" : ""}`}
-              style={{ animationDelay: `${idx * 110}ms` }}
+              className={`ge-stage ${st.state}`}
             >
               <div className="ge-track">
                 <div className={`ge-dot ${st.state}`}>
-                  {st.state === "done" ? <Check size={12} strokeWidth={3} /> : isActive ? <Loader2 size={12} className="spin" /> : st.state === "error" ? <AlertTriangle size={12} /> : st.key === "recorded" ? <Package size={12} /> : st.key === "submission" ? <Truck size={12} /> : st.key === "checking" ? <Search size={12} /> : <Clock size={11} />}
+                  {st.state === "done" ? <Check size={12} strokeWidth={2.5} /> : isActive ? <Loader2 size={12} className="spin" /> : st.state === "error" ? <AlertTriangle size={12} /> : st.key === "recorded" ? <Package size={11} /> : st.key === "submission" ? <Truck size={11} /> : st.key === "checking" ? <Search size={11} /> : <Clock size={10} />}
                 </div>
-                {idx < visibleStages.length - 1 && <div className={`ge-connector ${st.state === "done" ? "done" : isActive ? "active" : ""}`} />}
+                <div className={`ge-connector ${st.state === "done" ? "done" : isActive ? "active" : ""}`} />
               </div>
               <div className="ge-content">
                 <strong>{st.title}{st.at ? <time>{st.at}</time> : null}</strong>
@@ -160,16 +140,16 @@ export function GuidedExecutionFlow({ run, compact = false }: { run: LabRun | nu
       </div>
 
       {run && run.events.length > 0 && !compact && reveal >= 2 && (
-        <div className="ge-log" style={{ animationDelay: "200ms" }}>
+        <div className="ge-log">
           <div className="ge-log-header">
-            <ShieldCheck size={12} /> System activity · {run.events.length} events · real DB + worker · you triggered this
+            <ShieldCheck size={11} /> System activity · {run.events.length} events
           </div>
           <div className="ge-log-items">
-            {run.events.slice(-4).map((ev, i) => (
-              <div key={ev.id} className="ge-log-item" style={{ animationDelay: `${i*110}ms` }}>
+            {run.events.slice(-4).map((ev) => (
+              <div key={ev.id} className="ge-log-item">
                 <time>{ev.time}</time>
                 <strong>{ev.title}</strong>
-                <span>{ev.description.slice(0, 90)}{ev.description.length > 90 ? "…" : ""}</span>
+                <span>{ev.description.slice(0, 88)}{ev.description.length > 88 ? "…" : ""}</span>
               </div>
             ))}
           </div>
@@ -177,7 +157,7 @@ export function GuidedExecutionFlow({ run, compact = false }: { run: LabRun | nu
       )}
 
       <div className="ge-footnote">
-        {journey.isPaced ? "6s queue via startAfter + 2s handoff after durable claim. You clicked → system working." : "Live polling every 2.5s. No fake progress."} {journey.isComplete ? (journey.needsReview ? "Intentionally needs review." : "Ack ≠ packing/shipment.") : "Each stage has real variable timing — not a linear toy loader."}
+        {journey.isPaced ? "6s queue via startAfter + 2s handoff after durable claim." : "Live polling every 2.5s."} {journey.isComplete ? (journey.needsReview ? "Intentionally needs review." : "Ack ≠ packing/shipment.") : "Real backend work, not a linear loader."}
       </div>
     </div>
   );

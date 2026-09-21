@@ -12,7 +12,6 @@
   box-shadow: 0 18px 60px #1f23400f, 0 2px 10px #1f23400a;
   font-family: Arial, Helvetica, sans-serif;
   overflow: hidden;
-  transition: transform 0.22s ease, opacity 0.22s ease;
   pointer-events: none;
 }
 .live-journey * {
@@ -32,7 +31,7 @@
   gap: 12px;
   padding: 14px 14px 12px 16px;
   border-bottom: 1px solid #eef0f4;
-  background: linear-gradient(180deg, #fff, #fbfbfe);
+  background: #fff;
 }
 .live-journey-title {
   flex: 1;
@@ -97,7 +96,7 @@
 .live-journey-toggle:hover { background: #f8f8fb; }
 
 .live-journey-progress {
-  height: 3px;
+  height: 2px;
   background: #f0f1f5;
   position: relative;
   overflow: hidden;
@@ -105,20 +104,9 @@
 .live-journey-progress i {
   position: absolute;
   left: 0; top: 0; bottom: 0;
-  background: linear-gradient(90deg, #6d65e0, #a59cf0);
-  transition: width 0.6s cubic-bezier(.2,.8,.2,1);
-  border-radius: 0 3px 3px 0;
-}
-.live-journey-progress i::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(90deg, transparent, #ffffff66, transparent);
-  animation: live-shimmer 1.6s infinite;
-}
-@keyframes live-shimmer {
-  0% { transform: translateX(-100%); }
-  100% { transform: translateX(200%); }
+  background: #6d65e0;
+  transition: width 0.6s ease;
+  border-radius: 0 2px 2px 0;
 }
 
 .live-journey-body {
@@ -133,7 +121,7 @@
   display: grid;
   grid-template-columns: 28px 1fr;
   gap: 10px;
-  padding: 10px 0 12px;
+  padding: 9px 0 11px;
   position: relative;
 }
 .live-journey-stage + .live-journey-stage::before {
@@ -141,23 +129,23 @@
   position: absolute;
   left: 13px;
   top: -2px;
-  width: 2px;
-  height: 14px;
+  width: 1.5px;
+  height: 12px;
   background: #eceef3;
 }
 .live-journey-stage.done + .live-journey-stage::before {
   background: #c8c4e9;
 }
 .live-journey-stage.active + .live-journey-stage::before {
-  background: linear-gradient(180deg, #a59cf0, #eceef3);
+  background: #a59cf0;
 }
 .live-journey-dot {
-  width: 26px;
-  height: 26px;
+  width: 24px;
+  height: 24px;
   border-radius: 50%;
   display: grid;
   place-items: center;
-  border: 2px solid #e5e7ef;
+  border: 1.5px solid #e5e7ef;
   background: white;
   position: relative;
   flex-shrink: 0;
@@ -182,18 +170,6 @@
   border-color: #e6e8ee;
   color: #aab0be;
 }
-.live-journey-dot.active::after {
-  content: "";
-  position: absolute;
-  inset: -6px;
-  border-radius: 50%;
-  border: 1px solid #a59cf055;
-  animation: live-ping 1.6s cubic-bezier(0,0,.2,1) infinite;
-}
-@keyframes live-ping {
-  0% { transform: scale(0.8); opacity: 1; }
-  100% { transform: scale(1.4); opacity: 0; }
-}
 .live-journey-stage-content {
   min-width: 0;
 }
@@ -208,9 +184,9 @@
 .live-journey-stage-content small {
   display: block;
   font-size: 11px;
-  line-height: 1.55;
+  line-height: 1.5;
   color: #6d7586;
-  margin-top: 4px;
+  margin-top: 3px;
 }
 .live-journey-stage-content time {
   font-size: 9px;
@@ -278,10 +254,4 @@
     border-radius: 14px;
   }
   .live-journey.collapsed { width: auto; }
-}
-@media (prefers-reduced-motion: reduce) {
-  .live-journey, .live-journey-progress i, .live-journey-dot::after {
-    animation: none !important;
-    transition: none !important;
-  }
 }
